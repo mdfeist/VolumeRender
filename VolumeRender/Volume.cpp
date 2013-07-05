@@ -69,7 +69,7 @@ Volume::~Volume(void)
 
 void Volume::render() {
 	static float rot = 0.0f;
-	rot += 0.1f;
+	rot += 0.5f;
 
 	glLoadIdentity();
 	glRotatef(10,1,0,0);
