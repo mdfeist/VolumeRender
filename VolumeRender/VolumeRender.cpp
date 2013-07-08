@@ -17,7 +17,8 @@ int main(int argc, char* argv[])
 	render1->setClearColor(0.0f, 0.0f, 0.0f, 0.5f);
 	render1->addActor(volume);
 
-	while(true) {
+	//for(int i = 0; i < 10; i++) {
+	while(true) {	
 		Sleep(1000);
 	}
 

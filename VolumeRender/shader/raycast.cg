@@ -1,0 +1,37 @@
+void main(float2  texCoord : TEXCOORD0,
+	  uniform sampler2D frontTexData,
+	  uniform sampler2D backTexData,
+	  uniform sampler3D volume_tex,
+	  uniform float stepSize,
+	  out float4 color0 : COLOR0)
+{	
+	float3 dir = (tex2D(backTexData, texCoord) - tex2D(frontTexData, texCoord)).xyz;
+	float length_ray = length(dir.xyz); // to determine the length of the ray
+	float3 norm_dir = normalize(dir);
+	float delta = stepSize;
+	float3 delta_dir = norm_dir * delta;
+	float delta_dir_len = length(delta_dir.xyz);
+
+	float3 vector = tex2D(frontTexData, texCoord).xyz;
+
+	float4 col_acc = float4(0,0,0,0);
+	float alpha_acc = 0;
+	float length_acc = 0;
+	float4 color_sample;
+	float alpha_sample;
+	
+	if (length_ray != 0.0f) {
+		for(int i = 0; i < 450; i++) // 450 default
+		{
+			color_sample = tex3D(volume_tex, vector);
+			alpha_sample = color_sample.a * stepSize;
+			col_acc += (1.0f - alpha_acc) * color_sample * alpha_sample * 3.0f;
+			alpha_acc += alpha_sample;
+			vector += delta_dir;
+			length_acc += delta_dir_len;
+			if(length_acc >= length_ray || alpha_acc > 1.0f) break; // terminate if opacity > 1 or the ray is outside the volume
+		}
+	}
+
+	color0 = col_acc;
+}	

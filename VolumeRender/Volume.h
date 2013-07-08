@@ -30,12 +30,16 @@ private:
 	// Textures
 	GLuint front_facing;
 	GLuint back_facing;
-
+	GLuint volume_texture;
+	
 	// CG variables
 	CGcontext context;
 	CGprofile fragmentProfile;//CG_PROFILE_ARBFP1;
 	CGprogram fProgram;
-	CGparameter cgTexData;
+	CGparameter cgFrontTexData;
+	CGparameter cgBackTexData;
+	CGparameter cgVolumeexData;
+	CGparameter cgStepSize;
 
 	void createCube(float x, float y, float z);
 

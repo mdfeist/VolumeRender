@@ -81,10 +81,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
+    <None Include="shader\raycast.cg" />
+    <None Include="shader\simple.cg" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Actor.h" />
-    <ClInclude Include="OpenGL.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="Runnable.h" />
     <ClInclude Include="stdafx.h" />
@@ -93,7 +94,6 @@
     <ClInclude Include="Volume.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="OpenGL.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>

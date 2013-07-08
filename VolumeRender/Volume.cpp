@@ -1,10 +1,13 @@
 #include "StdAfx.h"
 #include "Volume.h"
 
+#include <math.h>
 #include <stddef.h>
 
 #define TEXTURE_SIZE 2048
 #define MEMBER_OFFSET(s,m) ((char *)NULL + (offsetof(s,m)))
+
+#define VOLUME_TEX_SIZE 128
 
 struct float3 {
 	float x, y, z;
@@ -19,6 +22,10 @@ struct float3 {
 		x = _x;
 		y = _y;
 		z = _z;
+	}
+
+	float3 operator - (const float3 &b) const {
+		return float3(x - b.x, y - b.y, z - b.z);
 	}
 };
 
@@ -37,6 +44,90 @@ struct Vertex
 	}
 };
 
+float length(float3 p) {
+	return sqrtf(p.x*p.x + p.y*p.y + p.z*p.z);
+}
+
+// create a test volume texture, here you could load your own volume
+GLuint create_volumetexture()
+{
+	int size = VOLUME_TEX_SIZE*VOLUME_TEX_SIZE*VOLUME_TEX_SIZE* 4;
+	GLubyte *data = new GLubyte[size];
+
+	for(int x = 0; x < VOLUME_TEX_SIZE; x++)
+	{for(int y = 0; y < VOLUME_TEX_SIZE; y++)
+	{for(int z = 0; z < VOLUME_TEX_SIZE; z++)
+	{
+		data[(x*4)   + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = z%250;
+		data[(x*4)+1 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = y%250;
+		data[(x*4)+2 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 250;
+		data[(x*4)+3 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 230;
+	  	
+		float3 p =	float3(x,y,z)- float3(VOLUME_TEX_SIZE-20,VOLUME_TEX_SIZE-30,VOLUME_TEX_SIZE-30);
+		bool test = (length(p) < 42);
+		if(test)
+			data[(x*4)+3 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 0;
+
+		p =	float3(x,y,z)- float3(VOLUME_TEX_SIZE/2,VOLUME_TEX_SIZE/2,VOLUME_TEX_SIZE/2);
+		test = (length(p) < 24);
+		if(test)
+			data[(x*4)+3 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 0;
+
+		
+		if(x > 20 && x < 40 && y > 0 && y < VOLUME_TEX_SIZE && z > 10 &&  z < 50)
+		{
+			
+			data[(x*4)   + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 100;
+		    data[(x*4)+1 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 250;
+		    data[(x*4)+2 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = y%100;
+			data[(x*4)+3 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 250;
+		}
+
+		if(x > 50 && x < 70 && y > 0 && y < VOLUME_TEX_SIZE && z > 10 &&  z < 50)
+		{
+			
+			data[(x*4)   + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 250;
+		    data[(x*4)+1 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 250;
+		    data[(x*4)+2 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = y%100;
+			data[(x*4)+3 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 250;
+		}
+
+		if(x > 80 && x < 100 && y > 0 && y < VOLUME_TEX_SIZE && z > 10 &&  z < 50)
+		{
+			
+			data[(x*4)   + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 250;
+		    data[(x*4)+1 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 70;
+		    data[(x*4)+2 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = y%100;
+			data[(x*4)+3 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 250;
+		}
+
+		p =	float3(x,y,z)- float3(24,24,24);
+		test = (length(p) < 40);
+		if(test)
+			data[(x*4)+3 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 0;
+
+			
+	}}}
+
+
+	GLuint volume_texture;
+	glPixelStorei(GL_UNPACK_ALIGNMENT,1);
+	glGenTextures(1, &volume_texture);
+	glBindTexture(GL_TEXTURE_3D, volume_texture);
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, VOLUME_TEX_SIZE, VOLUME_TEX_SIZE, VOLUME_TEX_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+
+	delete []data;
+	printf("volume texture created\n");
+
+	return volume_texture;
+}
+
 void errcheck() {
 	static GLenum errCode;
 	const GLubyte *errString;
@@ -44,6 +135,14 @@ void errcheck() {
 	if ((errCode = glGetError()) != GL_NO_ERROR) {
 		errString = gluErrorString(errCode);
 		fprintf(stderr, "OpenGL Error: %s\n", errString);
+	}
+}
+
+//Check for any Cg Errors
+void CheckCgError(void) {
+	CGerror err = cgGetError();
+	if (err != CG_NO_ERROR) {
+		fprintf(stderr, "CG error: %s\n", cgGetErrorString(err));
 	}
 }
 
@@ -77,12 +176,39 @@ Volume::~Volume(void)
 }
 
 void Volume::init() {
+	glewGetExtension("glMultiTexCoord2fvARB");  
+	if(glewGetExtension("GL_EXT_framebuffer_object") ) printf("GL_EXT_framebuffer_object support \n");
+	if(glewGetExtension("GL_EXT_renderbuffer_object")) printf("GL_EXT_renderbuffer_object support \n");
+	if(glewGetExtension("GL_ARB_vertex_buffer_object"))  printf("GL_ARB_vertex_buffer_object support\n");
+	if(GL_ARB_multitexture) printf("GL_ARB_multitexture support \n");
+	
+	if (glewGetExtension("GL_ARB_fragment_shader")      != GL_TRUE ||
+		glewGetExtension("GL_ARB_vertex_shader")        != GL_TRUE ||
+		glewGetExtension("GL_ARB_shader_objects")       != GL_TRUE ||
+		glewGetExtension("GL_ARB_shading_language_100") != GL_TRUE)
+	{
+		 printf("Driver does not support OpenGL Shading Language\n");
+	}
+
 	FBO = setupFBO();
 
 	front_facing = newTexture(TEXTURE_SIZE, TEXTURE_SIZE);
 	back_facing = newTexture(TEXTURE_SIZE, TEXTURE_SIZE);
 
+	char file[] = "shader/raycast.cg";
+	if (setupCg(&context, &fProgram, &fragmentProfile, file)) {
+		fprintf(stderr, "Error: %s\n", "Initializing Cg");
+		CheckCgError();
+	}
+
+	cgFrontTexData = cgGetNamedParameter(fProgram, "frontTexData");
+	cgBackTexData = cgGetNamedParameter(fProgram, "backTexData");
+	cgVolumeexData = cgGetNamedParameter(fProgram, "volume_tex");
+	cgStepSize = cgGetNamedParameter(fProgram, "stepSize");
+
 	createCube(1.0f, 1.0f, 1.0f);
+
+	volume_texture = create_volumetexture();
 
 	initialized = true;
 }
@@ -148,7 +274,7 @@ void Volume::unbindFBO() {
 	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
 }
 
-GLuint Volume::setupFBO() {								// Create a new frame buffer for off screen rendering
+GLuint Volume::setupFBO() {									// Create a new frame buffer for off screen rendering
 	GLuint fbo_handle;
 
 	glGenFramebuffersEXT(1, &fbo_handle);					// Create buffer
@@ -156,16 +282,20 @@ GLuint Volume::setupFBO() {								// Create a new frame buffer for off screen r
 
 	// The depth buffer
 	GLuint depthrenderbuffer;
-	glGenRenderbuffers(1, &depthrenderbuffer);
-	glBindRenderbuffer(GL_RENDERBUFFER, depthrenderbuffer);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, TEXTURE_SIZE, TEXTURE_SIZE);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthrenderbuffer);
+	glGenRenderbuffers(1, &depthrenderbuffer);				// Create depth buffer
+	glBindRenderbuffer(GL_RENDERBUFFER, depthrenderbuffer);	// Bind buffer
+	glRenderbufferStorage(GL_RENDERBUFFER,					// Create storage
+		GL_DEPTH_COMPONENT, 
+		TEXTURE_SIZE, TEXTURE_SIZE);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER,				// Attach depth buffer to frame buffer
+		GL_DEPTH_ATTACHMENT, 
+		GL_RENDERBUFFER, depthrenderbuffer);
 
 	errcheck();												// Check for errors
 
 	unbindFBO();											// Unbind frame buffer object
 
-	return fbo_handle;
+	return fbo_handle;										// Return new frame buffer
 }
 
 bool Volume::bindFBO(GLuint fbo_handle, GLuint fbo_texture) {	// Bind frame buffer and attach texture for rendering
@@ -180,7 +310,7 @@ bool Volume::bindFBO(GLuint fbo_handle, GLuint fbo_texture) {	// Bind frame buff
 	GLenum dbuffers[2] = { GL_COLOR_ATTACHMENT0_EXT };			// Set the list of draw buffers.
 	glDrawBuffers(1, dbuffers);									// Set Draw buffers
 	
-	// Always check that our framebuffer is ok
+	// Always check that our frame buffer is ok
 	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
 		return false;
 
@@ -189,9 +319,11 @@ bool Volume::bindFBO(GLuint fbo_handle, GLuint fbo_texture) {	// Bind frame buff
 
 int Volume::setupCg(CGcontext *context, CGprogram *fProgram, 
 			CGprofile *fragmentProfile, char *file) {
+	cgSetErrorCallback(CheckCgError);
+
 	*context = cgCreateContext();
 
-	if (*context == NULL) {
+	if (!cgIsContext(*context)) {
 		fprintf(stderr, "Error: %s\n", "Failed To Create Cg Context");
 		return 1;
 	}
@@ -211,12 +343,30 @@ int Volume::setupCg(CGcontext *context, CGprogram *fProgram,
 	*fProgram = cgCreateProgramFromFile(*context, CG_SOURCE, file,
 			*fragmentProfile, "main", NULL);
 
-	if (*fProgram)
-		cgGLLoadProgram(*fProgram);
-	else {
-		printf("Couldn't load fragment program.\n");
+	if (!*fProgram) {
+		printf("Couldn't create fragment program.\n");
 		return 1;
 	}
+
+	if (!cgIsProgramCompiled(*fProgram)) {
+		cgCompileProgram(*fProgram);
+	}
+
+	if (!cgIsProgramCompiled(*fProgram)) {
+		printf("Couldn't compile fragment program.\n");
+	}
+	
+	cgGLEnableProfile(*fragmentProfile);
+
+	if (*fProgram) {
+		cgGLLoadProgram(*fProgram);
+	} else {
+		printf("Couldn't load fragment program.\n");
+		CheckCgError();
+		return 1;
+	}
+
+	cgGLDisableProfile(*fragmentProfile);
 
 	return 0;
 }
@@ -238,39 +388,34 @@ void Volume::render(int w, int h) {
 	glColorPointer( 3, GL_FLOAT, sizeof(Vertex), MEMBER_OFFSET(Vertex,m_Color) );
 	glNormalPointer( GL_FLOAT, sizeof(Vertex), MEMBER_OFFSET(Vertex,m_Normal) );
 	
-	// Render to our framebuffer
-	bindFBO(FBO, front_facing);
-	glEnable(GL_TEXTURE_2D);
-
-	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-
-	// Render Front Facing
-	glDrawArrays( GL_QUADS, 0, 24 );
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-	// Render to our framebuffer
-	bindFBO(FBO, back_facing);
-
-	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-
-	// Render Back Facing
-	glEnable(GL_CULL_FACE);
-	glCullFace(GL_FRONT);
-	glDrawArrays( GL_QUADS, 0, 24 );
-	glDisable(GL_CULL_FACE);
+	glEnable(GL_TEXTURE_2D);							// Enable 2D textures
 	
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+	bindFBO(FBO, front_facing);							// Render to our frame buffer using the front_facing texture
+	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);	// Clear color and depth buffer's
+
+	glDrawArrays( GL_QUADS, 0, 24 );					// Render Front Facing
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);				// Unbind frame buffer
+	
+	bindFBO(FBO, back_facing);							// Render to our frame buffer using the back_facing texture
+	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);	// Clear color and depth buffer's
+
+	glEnable(GL_CULL_FACE);								// Enable the ability to remove face's
+	glCullFace(GL_FRONT);								// Remove front facing face's
+	glDrawArrays( GL_QUADS, 0, 24 );					// Render Back Facing
+	glDisable(GL_CULL_FACE);							// Disable the ability to remove face's
+	
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);				// Unbind frame buffer
 
 	// Unbind buffers so client-side vertex arrays still work.
-	glBindBufferARB( GL_ELEMENT_ARRAY_BUFFER_ARB, 0 );
 	glBindBufferARB( GL_ARRAY_BUFFER_ARB, 0 );
 
 	// Disable the client side arrays again.
 	glDisableClientState(GL_VERTEX_ARRAY);
 	glDisableClientState(GL_COLOR_ARRAY);
 	glDisableClientState(GL_NORMAL_ARRAY);
-	glPopMatrix();
+
+	glPopMatrix();										// Restore state
 
 	// Render Volume
 	glViewport(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
@@ -281,8 +426,22 @@ void Volume::render(int w, int h) {
 	glMatrixMode(GL_MODELVIEW);
 	glPushMatrix();
 	glLoadIdentity();
-	
+
+	cgGLEnableProfile(fragmentProfile);
+	cgGLBindProgram(fProgram);
+	CheckCgError();
+
 	glBindTexture(GL_TEXTURE_2D, back_facing);
+
+	cgGLSetParameter1f(cgStepSize, 1.0f/50.0f);
+
+	// enable Cg shader and texture (a 'compute' fragment program)
+	cgGLSetTextureParameter(cgFrontTexData, front_facing);
+	cgGLSetTextureParameter(cgBackTexData, back_facing);
+	cgGLSetTextureParameter(cgVolumeexData, volume_texture);
+	cgGLEnableTextureParameter(cgFrontTexData);
+	cgGLEnableTextureParameter(cgBackTexData);
+	cgGLEnableTextureParameter(cgVolumeexData);
 	
 	glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
 	
@@ -297,6 +456,10 @@ void Volume::render(int w, int h) {
 	glVertex3f(0, TEXTURE_SIZE, 0);
 	glEnd();
 	
+	// disable shader
+	cgGLDisableProfile(fragmentProfile);
+	CheckCgError();
+
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glDisable(GL_TEXTURE_2D);
 	
@@ -305,5 +468,4 @@ void Volume::render(int w, int h) {
 	glPopMatrix();
 	glMatrixMode(GL_MODELVIEW);
 	glPopMatrix(); //end the current object transformations
-
 }

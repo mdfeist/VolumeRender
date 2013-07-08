@@ -530,24 +530,25 @@ DWORD Renderer::runThread() {
 			{
 
 				// Get Current Time
-				SYSTEMTIME time;
-				GetSystemTime(&time);
-				dwCurrentTime = (float)(time.wHour*60.f*60.f*1000.f + time.wMinute*60.f*1000.f + time.wSecond*1000.f + time.wMilliseconds);
+				dwCurrentTime = timeGetTime();
 				// Calculate time Elapsed time
 				dwElapsedTime = dwCurrentTime - dwLastUpdateTime;
 				
 				// If the elapsed time is less then the fps
 				if (dwElapsedTime > fps)
 				{
+					// Set LastUpdateTime to CurrentTime
+					dwLastUpdateTime = dwCurrentTime;
+
+					//printf("Elapsed Time: %f\n", dwElapsedTime);
+					//printf("FPS Time: %f\n", fps);
+
 					lock();							// Lock Render
 					wglMakeCurrent( hDC, hRC );		// Make current context
 					render();						// Draw The Scene
 					SwapBuffers(hDC);				// Swap Buffers (Double Buffering)
 					wglMakeCurrent( NULL, NULL );	// Deactivate context
 					unlock();						// Unlock Render
-
-					// Set LastUpdateTime to CurrentTime
-					dwLastUpdateTime = dwCurrentTime;
 				}
 			}
 		}
