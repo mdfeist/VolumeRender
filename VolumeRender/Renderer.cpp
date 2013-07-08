@@ -6,6 +6,10 @@
 
 #include "Actor.h"
 
+extern "C" {
+    _declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
+}
+
 bool Msg(const char* msg) {
 	printf(msg);
 	printf("\n");
@@ -78,6 +82,20 @@ int Renderer::initGL()									// All Setup For OpenGL Goes Here
 		return FALSE;
 	}
 
+	glewGetExtension("glMultiTexCoord2fvARB");  
+	if(glewGetExtension("GL_EXT_framebuffer_object") ) Msg("GL_EXT_framebuffer_object support ");
+	if(glewGetExtension("GL_EXT_renderbuffer_object")) Msg("GL_EXT_renderbuffer_object support ");
+	if(glewGetExtension("GL_ARB_vertex_buffer_object"))  Msg("GL_ARB_vertex_buffer_object support");
+	if(GL_ARB_multitexture) Msg("GL_ARB_multitexture support \n");
+	
+	if (glewGetExtension("GL_ARB_fragment_shader")      != GL_TRUE ||
+		glewGetExtension("GL_ARB_vertex_shader")        != GL_TRUE ||
+		glewGetExtension("GL_ARB_shader_objects")       != GL_TRUE ||
+		glewGetExtension("GL_ARB_shading_language_100") != GL_TRUE)
+	{
+		 Msg("Driver does not support OpenGL Shading Language");
+	}
+
 	glShadeModel(GL_SMOOTH);							// Enable Smooth Shading
 	glClearColor(										// Set Background Color
 		clearColor[0], 
@@ -109,59 +127,61 @@ void Renderer::setClearColor(float r, float g, float b, float a) {
 	unlock();
 }
 
-void Renderer::addActor(Actor* a) {
-	actors.push_back(a);
+void Renderer::addActor(Actor* a) {						// Add actor to scene
+	actors.push_back(a);								// Push actor into actors vector
 }
 
-void Renderer::render() {
-	static float rot = 0.0f;
-	rot += 0.5f;
+void Renderer::render() {								// Render the scene
+	static float rot = 0.0f;							// Rotation value
+	rot += 0.5f;										// Update Rotation
 
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glLoadIdentity();
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);	// Clear screen (Color and Depth)
+	glLoadIdentity();									// Load Identity
 
-	glRotatef(10,1,0,0);
+	glRotatef(10,1,0,0);								// Set Camera
 	glTranslatef(0,-0.5,-2.25);
 	glRotatef(rot,0,1,0);
 
-	for each (Actor* a in actors) {
-		if (a->needsInit())
-			a->init();
+	for each (Actor* a in actors) {						// Loop through actors
+		if (a->needsInit())								// Check if actor needs set up
+			a->init();									// Setup actor
 
-		a->render(width, height);
+		a->render(width, height);						// Render actor
 	}
 }
 
-void Renderer::setWindow(HWND win) {
-	hWnd = win;
+void Renderer::setWindow(HWND win) {					// Set the window handle
+	hWnd = win;											// Update window handle
 }
 
-HWND Renderer::getWindow() {
-	return hWnd;
+HWND Renderer::getWindow() {							// Get the window handle
+	return hWnd;										// return hWnd
 }
 
-void Renderer::setActive(bool value) {
-	active = value;
+void Renderer::setActive(bool value) {					// Updated if window is active
+	active = value;										// Set if active
 }
 
-void Renderer::setKey(WPARAM key, bool value) {
-	keys[key] = value;
+void Renderer::setKey(WPARAM key, bool value) {			// Update keyboard input
+	keys[key] = value;									// Set if key pressed
 }
 
 void Renderer::resize(int width, int height) {
-	if (height == 0) height = 1;
+	if (height == 0) height = 1;						// Handles case 1/0 when calculating aspect ratio
 
-	this->width = width;
-	this->height = height;
+	this->width = width;								// Update screen width
+	this->height = height;								// Update screen height
 
-	lock();							// Lock renderer
-	wglMakeCurrent( hDC, hRC );		// Make current context
-	glViewport(0, 0, width, height);
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	gluPerspective(60.0, (GLfloat)width/(GLfloat)height, 0.01, 400.0);
-	glMatrixMode(GL_MODELVIEW);
-	unlock();						// Unlock Render
+	lock();												// Lock renderer
+	wglMakeCurrent( hDC, hRC );							// Make current context
+	glViewport(0, 0, width, height);					// Set Viewport
+	glMatrixMode(GL_PROJECTION);						// Update projection
+	glLoadIdentity();									// Load Identity
+	gluPerspective(60.0,								// Set Field of View
+		(GLfloat)width/(GLfloat)height,					// Set aspect ratio
+		0.01, 400.0);									// Set near and far clipping
+	glMatrixMode(GL_MODELVIEW);							// Change back to model view mode
+	unlock();											// Unlock Render
 }
 
 void Renderer::destroyContext() {
@@ -176,6 +196,7 @@ void Renderer::destroyContext() {
 		{
 			Msg("Release Rendering Context Failed.");
 		}
+
 		hRC=NULL;										// Set RC To NULL
 	}
 }

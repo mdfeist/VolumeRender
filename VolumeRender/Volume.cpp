@@ -176,20 +176,6 @@ Volume::~Volume(void)
 }
 
 void Volume::init() {
-	glewGetExtension("glMultiTexCoord2fvARB");  
-	if(glewGetExtension("GL_EXT_framebuffer_object") ) printf("GL_EXT_framebuffer_object support \n");
-	if(glewGetExtension("GL_EXT_renderbuffer_object")) printf("GL_EXT_renderbuffer_object support \n");
-	if(glewGetExtension("GL_ARB_vertex_buffer_object"))  printf("GL_ARB_vertex_buffer_object support\n");
-	if(GL_ARB_multitexture) printf("GL_ARB_multitexture support \n");
-	
-	if (glewGetExtension("GL_ARB_fragment_shader")      != GL_TRUE ||
-		glewGetExtension("GL_ARB_vertex_shader")        != GL_TRUE ||
-		glewGetExtension("GL_ARB_shader_objects")       != GL_TRUE ||
-		glewGetExtension("GL_ARB_shading_language_100") != GL_TRUE)
-	{
-		 printf("Driver does not support OpenGL Shading Language\n");
-	}
-
 	FBO = setupFBO();
 
 	front_facing = newTexture(TEXTURE_SIZE, TEXTURE_SIZE);
@@ -393,7 +379,10 @@ void Volume::render(int w, int h) {
 	bindFBO(FBO, front_facing);							// Render to our frame buffer using the front_facing texture
 	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);	// Clear color and depth buffer's
 
+	glEnable(GL_CULL_FACE);								// Enable the ability to remove face's
+	glCullFace(GL_BACK);								// Remove back facing face's
 	glDrawArrays( GL_QUADS, 0, 24 );					// Render Front Facing
+	glDisable(GL_CULL_FACE);							// Disable the ability to remove face's
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);				// Unbind frame buffer
 	
