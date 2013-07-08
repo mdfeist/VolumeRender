@@ -21,6 +21,10 @@ public:
 	Renderer(void);
 	~Renderer(void);
 
+	static LRESULT CALLBACK StaticWndProc(HWND, UINT, WPARAM, LPARAM);	// Declaration For WndProc
+	LRESULT WndProc( UINT, WPARAM, LPARAM);
+
+	void setWindow(HWND win);
 	HWND getWindow();
 	void setClearColor(float r, float g, float b, float a);
 
@@ -33,35 +37,29 @@ private:
 	HWND		hWnd;			// Holds Our Window Handle
 	HINSTANCE	hInstance;		// Holds The Instance Of The Application
 
+	int width;					// Screen width
+	int height;					// Screen Height
+
 	bool		keys[256];		// Array Used For The Keyboard Routine
 	bool		active;			// Window Active Flag Set To TRUE By Default
 	bool		fullscreen;		// Fullscreen Flag Set To Fullscreen Mode By Default
 	bool		done;			// Bool Variable To Exit Loop
 
-	bool		initialized;
-
 	HANDLE		g_hMutex;
-
-	// Frame Buffer Object
-	GLuint FBO;
-	// Textures
-	GLuint FBO_texture;
-
-	// CG variables
-	CGcontext context;
-	CGprofile fragmentProfile;//CG_PROFILE_ARBFP1;
-	CGprogram fProgram;
-	CGparameter cgTexData;
 
 	// GL Clear Color
 	float clearColor[4];
-
+	// Render Actors
 	std::vector<Actor*> actors;
 
+	// Mutex Functions
 	bool lock();
 	void unlock();
 
+	// GL Window
 	int initGL();
+	void destroyContext();
+	void destroyWindow();
 	void KillGLWindow();
 	BOOL CreateGLWindow(LPCWSTR title, int width, int height, int bits, bool fullscreenflag);
 

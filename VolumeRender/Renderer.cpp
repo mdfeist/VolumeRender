@@ -6,8 +6,6 @@
 
 #include "Actor.h"
 
-LRESULT	CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);	// Declaration For WndProc
-
 bool Msg(const char* msg) {
 	printf(msg);
 	printf("\n");
@@ -25,6 +23,9 @@ Renderer::Renderer(void) {
 	clearColor[1] = 0.f;
 	clearColor[2] = 0.f;
 	clearColor[3] = 0.5f;
+
+	width = 640;
+	height = 480;
 
 	start();
 }
@@ -64,6 +65,19 @@ void Renderer::unlock() {
 
 int Renderer::initGL()									// All Setup For OpenGL Goes Here
 {
+	// Init GLEW
+	if ( glewInit() != GLEW_OK )
+	{
+		Msg("Failed to initialize GLEW.");
+		return FALSE;
+	}
+
+	if ( !glewIsSupported("GL_VERSION_1_5") && !glewIsSupported( "GL_ARB_vertex_buffer_object" ) )
+	{
+		Msg("ARB_vertex_buffer_object not supported!");
+		return FALSE;
+	}
+
 	glShadeModel(GL_SMOOTH);							// Enable Smooth Shading
 	glClearColor(										// Set Background Color
 		clearColor[0], 
@@ -73,7 +87,9 @@ int Renderer::initGL()									// All Setup For OpenGL Goes Here
 	glClearDepth(1.0f);									// Depth Buffer Setup
 	glEnable(GL_DEPTH_TEST);							// Enables Depth Testing
 	glDepthFunc(GL_LEQUAL);								// The Type Of Depth Testing To Do
+	glDisable(GL_LIGHTING);
 	glHint(GL_PERSPECTIVE_CORRECTION_HINT, GL_NICEST);	// Really Nice Perspective Calculations
+
 	return TRUE;										// Initialization Went OK
 }
 
@@ -98,11 +114,26 @@ void Renderer::addActor(Actor* a) {
 }
 
 void Renderer::render() {
+	static float rot = 0.0f;
+	rot += 0.5f;
+
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glLoadIdentity();
 
-	for each (Actor* a in actors)
-		a->render();
+	glRotatef(10,1,0,0);
+	glTranslatef(0,-0.5,-2.25);
+	glRotatef(rot,0,1,0);
+
+	for each (Actor* a in actors) {
+		if (a->needsInit())
+			a->init();
+
+		a->render(width, height);
+	}
+}
+
+void Renderer::setWindow(HWND win) {
+	hWnd = win;
 }
 
 HWND Renderer::getWindow() {
@@ -120,6 +151,9 @@ void Renderer::setKey(WPARAM key, bool value) {
 void Renderer::resize(int width, int height) {
 	if (height == 0) height = 1;
 
+	this->width = width;
+	this->height = height;
+
 	lock();							// Lock renderer
 	wglMakeCurrent( hDC, hRC );		// Make current context
 	glViewport(0, 0, width, height);
@@ -130,14 +164,7 @@ void Renderer::resize(int width, int height) {
 	unlock();						// Unlock Render
 }
 
-void Renderer::KillGLWindow()							// Properly Kill The Window
-{
-	if (fullscreen)										// Are We In Fullscreen Mode?
-	{
-		ChangeDisplaySettings(NULL,0);					// If So Switch Back To The Desktop
-		ShowCursor(TRUE);								// Show Mouse Pointer
-	}
-
+void Renderer::destroyContext() {
 	if (hRC)											// Do We Have A Rendering Context?
 	{
 		if (!wglMakeCurrent(NULL,NULL))					// Are We Able To Release The DC And RC Contexts?
@@ -151,7 +178,9 @@ void Renderer::KillGLWindow()							// Properly Kill The Window
 		}
 		hRC=NULL;										// Set RC To NULL
 	}
+}
 
+void Renderer::destroyWindow() {
 	if (hDC && !ReleaseDC(hWnd,hDC))					// Are We Able To Release The DC
 	{
 		Msg("Release Device Context Failed.");
@@ -169,6 +198,19 @@ void Renderer::KillGLWindow()							// Properly Kill The Window
 		Msg("Could Not Unregister Class.");
 		hInstance=NULL;									// Set hInstance To NULL
 	}
+}
+
+void Renderer::KillGLWindow()							// Properly Kill The Window
+{
+	/*
+	if (fullscreen)										// Are We In Fullscreen Mode?
+	{
+		ChangeDisplaySettings(NULL,0);					// If So Switch Back To The Desktop
+		ShowCursor(TRUE);								// Show Mouse Pointer
+	}
+	*/
+	destroyContext();
+	destroyWindow();
 }
 
 /*	This Code Creates Our OpenGL Window.  Parameters Are:					*
@@ -194,7 +236,7 @@ BOOL Renderer::CreateGLWindow(LPCWSTR title, int width, int height, int bits, bo
 
 	hInstance			= GetModuleHandle(NULL);				// Grab An Instance For Our Window
 	wc.style			= CS_HREDRAW | CS_VREDRAW | CS_OWNDC;	// Redraw On Size, And Own DC For Window.
-	wc.lpfnWndProc		= (WNDPROC) WndProc;					// WndProc Handles Messages
+	wc.lpfnWndProc		= (WNDPROC) Renderer::StaticWndProc;	// WndProc Handles Messages
 	wc.cbClsExtra		= 0;									// No Extra Window Data
 	wc.cbWndExtra		= 0;									// No Extra Window Data
 	wc.hInstance		= hInstance;							// Set The Instance
@@ -245,7 +287,6 @@ BOOL Renderer::CreateGLWindow(LPCWSTR title, int width, int height, int bits, bo
 	{
 		dwExStyle=WS_EX_APPWINDOW;								// Window Extended Style
 		dwStyle=WS_POPUP;										// Windows Style
-		ShowCursor(FALSE);										// Hide Mouse Pointer
 	}
 	else
 	{
@@ -334,6 +375,8 @@ BOOL Renderer::CreateGLWindow(LPCWSTR title, int width, int height, int bits, bo
 		return FALSE;								// Return FALSE
 	}
 
+	SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)this);
+
 	ShowWindow(hWnd,SW_SHOW);						// Show The Window
 	SetForegroundWindow(hWnd);						// Slightly Higher Priority
 	SetFocus(hWnd);									// Sets Keyboard Focus To The Window
@@ -346,54 +389,86 @@ BOOL Renderer::CreateGLWindow(LPCWSTR title, int width, int height, int bits, bo
 		return FALSE;								// Return FALSE
 	}
 
-	wglMakeCurrent( NULL, NULL );
+	wglMakeCurrent( NULL, NULL );					// Deactivate The Rendering Context
 
 	return TRUE;									// Success
 }
 
-LRESULT CALLBACK WndProc(	HWND	hWnd,			// Handle For This Window
-							UINT	uMsg,			// Message For This Window
+LRESULT CALLBACK Renderer::StaticWndProc(	HWND	hWnd,			// Handle For This Window
+											UINT	uMsg,			// Message For This Window
+											WPARAM	wParam,			// Additional Message Information
+											LPARAM	lParam)			// Additional Message Information
+{
+	Renderer *ren = NULL;
+
+	// Get pointer to window
+	if(uMsg == WM_CREATE)
+	{
+		//ren = (Renderer*)((LPCREATESTRUCT)lParam)->lpCreateParams;
+		//SetWindowLongPtr(hWnd, GWL_USERDATA, (LONG_PTR)ren);
+		Msg("Create Window.");
+	}
+	else
+	{
+		ren = (Renderer*)GetWindowLongPtr(hWnd, GWL_USERDATA);
+		if(!ren) return DefWindowProc(hWnd, uMsg, wParam, lParam);
+	}
+	
+	return ren->WndProc(uMsg,wParam,lParam);
+}
+LRESULT Renderer::WndProc(	UINT	uMsg,			// Message For This Window
 							WPARAM	wParam,			// Additional Message Information
 							LPARAM	lParam)			// Additional Message Information
 {
-	
-	switch (uMsg)											// Check For Windows Messages
+	switch (uMsg)									// Check For Windows Messages
 	{
-		case WM_ACTIVATE:									// Watch For Window Activate Message
+		case WM_ACTIVATE:							// Watch For Window Activate Message
 		{
-			return 0;										// Return To The Message Loop
-		}
-
-		case WM_SYSCOMMAND:									// Intercept System Commands
-		{
-			switch (wParam)									// Check System Calls
+			if (!HIWORD(wParam))					// Check Minimization State
 			{
-				case SC_SCREENSAVE:							// Screensaver Trying To Start?
-				case SC_MONITORPOWER:						// Monitor Trying To Enter Powersave?
-				return 0;									// Prevent From Happening
+				setActive(TRUE);					// Program Is Active
 			}
-			break;											// Exit
+			else
+			{
+				setActive(FALSE);					// Program Is No Longer Active
+			}
+
+			return 0;								// Return To The Message Loop
 		}
 
-		case WM_CLOSE:										// Did We Receive A Close Message?
+		case WM_SYSCOMMAND:							// Intercept System Commands
 		{
-			PostQuitMessage(0);								// Send A Quit Message
-			return 0;										// Jump Back
+			switch (wParam)							// Check System Calls
+			{
+				case SC_SCREENSAVE:					// Screensaver Trying To Start?
+				case SC_MONITORPOWER:				// Monitor Trying To Enter Powersave?
+				return 0;							// Prevent From Happening
+			}
+			break;									// Exit
 		}
 
-		case WM_KEYDOWN:									// Is A Key Being Held Down?
+		case WM_CLOSE:								// Did We Receive A Close Message?
+		{
+			PostQuitMessage(0);						// Send A Quit Message
+			return 0;								// Jump Back
+		}
+
+		case WM_KEYDOWN:							// Is A Key Being Held Down?
 		{				
-			return 0;										// Jump Back
+			setKey(wParam, TRUE);
+			return 0;								// Jump Back
 		}
 
-		case WM_KEYUP:										// Has A Key Been Released?
+		case WM_KEYUP:								// Has A Key Been Released?
 		{
-			return 0;										// Jump Back
+			setKey(wParam, FALSE);
+			return 0;								// Jump Back
 		}
 
-		case WM_SIZE:										// Resize The OpenGL Window
+		case WM_SIZE:								// Resize The OpenGL Window
 		{
-			return 0;										// Jump Back
+			resize(LOWORD(lParam),HIWORD(lParam));	// LoWord=Width, HiWord=Height
+			return 0;								// Jump Back
 		}
 	}
 
@@ -419,9 +494,7 @@ DWORD Renderer::runThread() {
 
 	memset( keys, FALSE, 256 );
 
-	bool created = CreateGLWindow(L"OpenGL",640,480,16,fullscreen);
-
-	initialized = true;
+	BOOL created = CreateGLWindow(L"OpenGL",640,480,16,fullscreen);
 
 	// Create Our OpenGL Window
 	if (!created)
@@ -438,29 +511,6 @@ DWORD Renderer::runThread() {
 			if (msg.message==WM_QUIT)				// Have We Received A Quit Message?
 			{
 				done=TRUE;							// If So done=TRUE
-			}
-			else if (msg.message==WM_ACTIVATE) 
-			{
-				if (!HIWORD(msg.wParam))			// Check Minimization State
-				{
-					setActive(TRUE);				// Program Is Active
-				}
-				else
-				{
-					setActive(FALSE);				// Program Is No Longer Active
-				}
-			}
-			else if (msg.message==WM_KEYDOWN) 
-			{
-				setKey(msg.wParam, TRUE);
-			}
-			else if (msg.message==WM_KEYUP) 
-			{
-				setKey(msg.wParam, FALSE);
-			}
-			else if (msg.message==WM_SIZE) 
-			{
-				resize(LOWORD(msg.lParam),HIWORD(msg.lParam));	// LoWord=Width, HiWord=Height
 			}
 			else									// If Not, Deal With Window Messages
 			{
@@ -489,12 +539,12 @@ DWORD Renderer::runThread() {
 				// If the elapsed time is less then the fps
 				if (dwElapsedTime > fps)
 				{
-					lock();
-					wglMakeCurrent( hDC, hRC );	// Make current context
-					render();					// Draw The Scene
-					SwapBuffers(hDC);			// Swap Buffers (Double Buffering)
-					wglMakeCurrent( NULL, NULL );
-					unlock();
+					lock();							// Lock Render
+					wglMakeCurrent( hDC, hRC );		// Make current context
+					render();						// Draw The Scene
+					SwapBuffers(hDC);				// Swap Buffers (Double Buffering)
+					wglMakeCurrent( NULL, NULL );	// Deactivate context
+					unlock();						// Unlock Render
 
 					// Set LastUpdateTime to CurrentTime
 					dwLastUpdateTime = dwCurrentTime;
@@ -505,13 +555,28 @@ DWORD Renderer::runThread() {
 		if (keys[VK_F1])						// Is F1 Being Pressed?
 		{
 			keys[VK_F1]=FALSE;					// If So Make Key FALSE
-			KillGLWindow();						// Kill Our Current Window
+			//destroyWindow();					// Kill Our Current Window
 			fullscreen=!fullscreen;				// Toggle Fullscreen / Windowed Mode
-			// Recreate Our OpenGL Window
-			if (!CreateGLWindow(L"OpenGL",640,480,16,fullscreen))
+			// Adjust Our OpenGL Window
+			DWORD style = GetWindowLong(hWnd, GWL_STYLE);		// Get current window style
+
+			if (fullscreen)										// Are We Still In Fullscreen Mode?
 			{
-				//return 0;						// Quit If Window Was Not Created
+				style &= ~WS_EX_STATICEDGE;						// Remove Static Edge Style
+				style &= ~WS_OVERLAPPEDWINDOW;					// Remove Overlapped Window Style
+				style |= WS_POPUP;								// Add Pop Up Style
 			}
+			else
+			{
+				style &= ~WS_POPUP;								// Remove Pop Up Style
+				style |= WS_EX_STATICEDGE;						// Add Static Edge Style
+				style |= WS_OVERLAPPEDWINDOW;					// Add Overlapped Window Style
+			}
+
+			SetWindowLong(hWnd, GWL_STYLE, style);				// Set New Style
+			SetWindowPos(hWnd, HWND_TOP,						// Update Window Position
+				0, 0, 1024, 480, 
+				SWP_SHOWWINDOW);
 		}
 	}
 
