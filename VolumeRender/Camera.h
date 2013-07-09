@@ -1,12 +1,13 @@
 #pragma once
 
 #include "Eigen\Core.h"
-#include "Eigen\src\Geometry\RotationBase.h"
-#include "Eigen\src\Geometry\Quaternion.h"
+#include "Eigen\Geometry.h"
 
 class Camera
 {
 public:
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
 	Camera(void);
 	~Camera(void);
 
@@ -24,6 +25,25 @@ public:
 
 	void setFarClipping(float value);
 	float getFarClipping();
+
+	void setPosition(float x, float y, float z);
+	void setPosition(Eigen::Vector3f &value);
+
+	void increasePosition(float x, float y, float z);
+	void increasePosition(Eigen::Vector3f &value);
+
+	Eigen::Vector3f getPosition();
+
+	void setRotation(float w, float x, float y, float z);
+	void setRotation(Eigen::Quaternionf &value);
+
+	Eigen::Quaternionf getRotation();
+
+	Eigen::Vector3f getForwardVector();
+	Eigen::Vector3f getUpVector();
+	Eigen::Vector3f getRightVector();
+
+	Eigen::Quaternionf getLookAt(Eigen::Vector3f &lookAt);
 
 private:
 	float fov;								// Field of View
