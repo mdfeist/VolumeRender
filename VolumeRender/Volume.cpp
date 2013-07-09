@@ -4,47 +4,53 @@
 #include <math.h>
 #include <stddef.h>
 
-#define TEXTURE_SIZE 2048
+// All textures for the buffer are TEXTURE_SIZExTEXTURE_SIZE in dimensions
+#define TEXTURE_SIZE 512
+// Used to find the offset of variables in a structure (found when binding the VBO)
 #define MEMBER_OFFSET(s,m) ((char *)NULL + (offsetof(s,m)))
-
+// The size of the volume test data
 #define VOLUME_TEX_SIZE 128
 
-struct float3 {
-	float x, y, z;
+struct float3 {										// A three dimensional float
+	float x, y, z;									// Variables for each dimension
 	
-	float3() {
+	float3() {										// Generic constructor
 		x = 0.f;
 		y = 0.f;
 		z = 0.f;
 	}
 
-	float3(float _x, float _y, float _z) {
+	float3(float _x, float _y, float _z) {			// Constructor with given values
 		x = _x;
 		y = _y;
 		z = _z;
 	}
 
-	float3 operator - (const float3 &b) const {
+	float3 operator + (const float3 &b) const {		// Addition operator
+		return float3(x + b.x, y + b.y, z + b.z);
+	}
+
+	float3 operator - (const float3 &b) const {		// Subtraction operator
 		return float3(x - b.x, y - b.y, z - b.z);
 	}
 };
 
-struct Vertex
+struct Vertex										// Vertex used for creating VBO
 {
-    float3 m_Pos;
-    float3 m_Color;
-	float3 m_Normal;
+    float3 m_Pos;									// Position of vertex
+    float3 m_Color;									// Color of vertex
+	float3 m_Normal;								// Normal of vertex
 
-	Vertex() {}
+	Vertex() {}										// Generic constructor
 
-	Vertex(float3 pos, float3 norm) {
-		m_Pos = pos;
-		m_Color = pos;
-		m_Normal = norm;
+	Vertex(float3 pos, float3 norm) {				// Constructor with given values
+		m_Pos = pos;								// Set the position
+		m_Color = pos;								// Set color to be the same as position
+		m_Normal = norm;							// Set normal
 	}
 };
 
-float length(float3 p) {
+float length(float3 p) {							// Get the length of a float3
 	return sqrtf(p.x*p.x + p.y*p.y + p.z*p.z);
 }
 
@@ -128,6 +134,7 @@ GLuint create_volumetexture()
 	return volume_texture;
 }
 
+//Check for any GL Errors
 void errcheck() {
 	static GLenum errCode;
 	const GLubyte *errString;
@@ -146,32 +153,42 @@ void CheckCgError(void) {
 	}
 }
 
+// Create a new 2D texture
 GLuint newTexture(int width, int height) {
 	GLuint texture;
-	glGenTextures(1, &texture);
-	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F_ARB, width, height, 0, GL_RGBA, GL_FLOAT, NULL);
-	return texture;
+	glGenTextures(1, &texture);												// Generate texture
+	glBindTexture(GL_TEXTURE_2D, texture);									// Bind texture
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);				// Use the texture color when rendering
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);		// Set the MAG_FILTER to interpolate linearly between the closest pixels
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);		// Set the MIN_FILTER to interpolate linearly between the closest pixels
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);	// Clamp the X value to boarder when doing texture look ups
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);	// Clamp the Y value to boarder when doing texture look ups
+	glTexImage2D(															// Create texture
+		GL_TEXTURE_2D,														// Texture is 2D
+		0,																	// Use base level of detail
+		GL_RGBA16F_ARB,														// Use internal format GL_RGBA16F_ARB
+		width,																// Set the texture width
+		height,																// Set the texture height
+		0,																	// Set the boarder to zero (Needs to be 0)
+		GL_RGBA,															// Use format GL_RGBA
+		GL_FLOAT,															// Use type GL_FLOAT
+		NULL);																// Set data to NULL
+	return texture;															// Return texture
 }
 
-Volume::Volume(void)
+Volume::Volume(void)														// Constructor
 {
-	g_uiVerticesVBO = 0;
-	initialized = false;
+	cubeVerticesVBO = 0;													// Set cubeVerticesVBO to NULL
+	initialized = false;													// Set initialized to false
 }
 
 
-Volume::~Volume(void)
+Volume::~Volume(void)														// Destructor
 {
-	if ( g_uiVerticesVBO != 0 )
+	if ( cubeVerticesVBO != 0 )												// Check if cubeVerticesVBO is not NULL
 	{
-		glDeleteBuffersARB( 1, &g_uiVerticesVBO );
-		g_uiVerticesVBO = 0;
+		glDeleteBuffersARB( 1, &cubeVerticesVBO );							// Delete cubeVerticesVBO from GPU buffer
+		cubeVerticesVBO = 0;												// Set cubeVerticesVBO to NULL
 	}
 }
 
@@ -203,17 +220,9 @@ bool Volume::needsInit() {
 	return !initialized;
 }
 
-void Volume::reset() {
-	if ( g_uiVerticesVBO != 0 )
-	{
-		glDeleteBuffersARB( 1, &g_uiVerticesVBO );
-		g_uiVerticesVBO = 0;
-	}
-}
-
 void Volume::createCube(float x, float y, float z) {
 	// Define the 24 vertices of a unit cube
-	Vertex g_Vertices[24] = {
+	Vertex cube_Vertices[24] = {
 		// Back side
 		Vertex( float3( 0.0, 0.0, 0.0), float3(0.0, 0.0, -1.0)),
 		Vertex( float3( 0.0, y, 0.0), float3(0.0, 0.0, -1.0)),
@@ -247,11 +256,11 @@ void Volume::createCube(float x, float y, float z) {
 	};
 
 	// Create VBO
-	glGenBuffersARB( 1, &g_uiVerticesVBO );
+	glGenBuffersARB( 1, &cubeVerticesVBO );
 
 	// Copy the vertex data to the VBO
-	glBindBufferARB( GL_ARRAY_BUFFER_ARB, g_uiVerticesVBO );
-	glBufferDataARB( GL_ARRAY_BUFFER_ARB, sizeof(g_Vertices), g_Vertices, GL_STATIC_DRAW_ARB );
+	glBindBufferARB( GL_ARRAY_BUFFER_ARB, cubeVerticesVBO );
+	glBufferDataARB( GL_ARRAY_BUFFER_ARB, sizeof(cube_Vertices), cube_Vertices, GL_STATIC_DRAW_ARB );
 	glBindBufferARB( GL_ARRAY_BUFFER_ARB, 0 );
 }
 
@@ -271,11 +280,11 @@ GLuint Volume::setupFBO() {									// Create a new frame buffer for off screen 
 	glGenRenderbuffers(1, &depthrenderbuffer);				// Create depth buffer
 	glBindRenderbuffer(GL_RENDERBUFFER, depthrenderbuffer);	// Bind buffer
 	glRenderbufferStorage(GL_RENDERBUFFER,					// Create storage
-		GL_DEPTH_COMPONENT, 
-		TEXTURE_SIZE, TEXTURE_SIZE);
+		GL_DEPTH_COMPONENT,									// Specify that the internal format is the depth component
+		TEXTURE_SIZE, TEXTURE_SIZE);						// Set storage width and height
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER,				// Attach depth buffer to frame buffer
-		GL_DEPTH_ATTACHMENT, 
-		GL_RENDERBUFFER, depthrenderbuffer);
+		GL_DEPTH_ATTACHMENT,								// Specify that the internal format is the depth component
+		GL_RENDERBUFFER, depthrenderbuffer);				// Attach depth render buffer texture to the frame buffer
 
 	errcheck();												// Check for errors
 
@@ -357,7 +366,19 @@ int Volume::setupCg(CGcontext *context, CGprogram *fProgram,
 	return 0;
 }
 
-void Volume::render(int w, int h) {
+void Volume::render(Camera* camera) {
+	int width = camera->getWidth();
+	int height = camera->getHeight();
+
+	glViewport(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);		// Set Viewport
+	glMatrixMode(GL_PROJECTION);						// Update projection
+	glPushMatrix();
+	glLoadIdentity();									// Load Identity
+	gluPerspective(camera->getFOV(),					// Set Field of View
+		(GLfloat)width/(GLfloat)height,					// Set aspect ratio
+		camera->getNearClipping(),						// Set near clipping
+		camera->getFarClipping());						// Set far clipping
+	glMatrixMode(GL_MODELVIEW);							// Change back to model view mode
 	glPushMatrix(); //set where to start the current object
 
 	glTranslatef(-0.5,-0.5,-0.5); // center the texturecube
@@ -369,7 +390,7 @@ void Volume::render(int w, int h) {
 	glEnableClientState(GL_NORMAL_ARRAY);
 
 	// Bind the vertices's VBO
-	glBindBufferARB( GL_ARRAY_BUFFER_ARB, g_uiVerticesVBO );
+	glBindBufferARB( GL_ARRAY_BUFFER_ARB, cubeVerticesVBO );
 	glVertexPointer( 3, GL_FLOAT, sizeof(Vertex), MEMBER_OFFSET(Vertex,m_Pos) );
 	glColorPointer( 3, GL_FLOAT, sizeof(Vertex), MEMBER_OFFSET(Vertex,m_Color) );
 	glNormalPointer( GL_FLOAT, sizeof(Vertex), MEMBER_OFFSET(Vertex,m_Normal) );
@@ -407,9 +428,8 @@ void Volume::render(int w, int h) {
 	glPopMatrix();										// Restore state
 
 	// Render Volume
-	glViewport(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
+	glViewport(0, 0, width, height);
 	glMatrixMode(GL_PROJECTION);
-	glPushMatrix();
 	glLoadIdentity();
 	glOrtho(0, TEXTURE_SIZE, TEXTURE_SIZE, 0, -1.0f, 1.0f);
 	glMatrixMode(GL_MODELVIEW);
@@ -450,7 +470,6 @@ void Volume::render(int w, int h) {
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glDisable(GL_TEXTURE_2D);
 	
-	glViewport(0, 0, w, h);
 	glMatrixMode(GL_PROJECTION);
 	glPopMatrix();
 	glMatrixMode(GL_MODELVIEW);

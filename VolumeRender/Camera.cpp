@@ -4,6 +4,11 @@
 
 Camera::Camera(void)
 {
+	fov = 60.0f;
+	width = 1;
+	height = 1;
+	nearClipping = 0.01f;
+	farClipping = 400.0f;
 }
 
 

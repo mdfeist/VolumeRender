@@ -5,6 +5,7 @@
 #include <stdlib.h>
 
 #include "Actor.h"
+#include "Camera.h"
 
 extern "C" {
     _declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
@@ -28,8 +29,7 @@ Renderer::Renderer(void) {
 	clearColor[2] = 0.f;
 	clearColor[3] = 0.5f;
 
-	width = 640;
-	height = 480;
+	camera = new Camera();
 
 	start();
 }
@@ -65,6 +65,10 @@ bool Renderer::lock() {
 
 void Renderer::unlock() {
 	ReleaseMutex(g_hMutex);
+}
+
+Camera* Renderer::getActiveCamera() {
+	return camera;
 }
 
 int Renderer::initGL()									// All Setup For OpenGL Goes Here
@@ -146,7 +150,7 @@ void Renderer::render() {								// Render the scene
 		if (a->needsInit())								// Check if actor needs set up
 			a->init();									// Setup actor
 
-		a->render(width, height);						// Render actor
+		a->render(camera);								// Render actor
 	}
 }
 
@@ -169,17 +173,18 @@ void Renderer::setKey(WPARAM key, bool value) {			// Update keyboard input
 void Renderer::resize(int width, int height) {
 	if (height == 0) height = 1;						// Handles case 1/0 when calculating aspect ratio
 
-	this->width = width;								// Update screen width
-	this->height = height;								// Update screen height
+	camera->setWidth(width);							// Update screen width
+	camera->setHeight(height);							// Update screen height
 
 	lock();												// Lock renderer
 	wglMakeCurrent( hDC, hRC );							// Make current context
 	glViewport(0, 0, width, height);					// Set Viewport
 	glMatrixMode(GL_PROJECTION);						// Update projection
 	glLoadIdentity();									// Load Identity
-	gluPerspective(60.0,								// Set Field of View
+	gluPerspective(camera->getFOV(),					// Set Field of View
 		(GLfloat)width/(GLfloat)height,					// Set aspect ratio
-		0.01, 400.0);									// Set near and far clipping
+		camera->getNearClipping(),						// Set near clipping
+		camera->getFarClipping());						// Set far clipping
 	glMatrixMode(GL_MODELVIEW);							// Change back to model view mode
 	unlock();											// Unlock Render
 }

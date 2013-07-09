@@ -14,6 +14,7 @@
 #include "Thread.h"
 
 class Actor;
+class Camera;
 
 class Renderer : public Thread
 {
@@ -29,6 +30,8 @@ public:
 	void setClearColor(float r, float g, float b, float a);
 
 	void addActor(Actor* a);
+
+	Camera* getActiveCamera();
 protected:
 	DWORD runThread();
 private:
@@ -37,13 +40,12 @@ private:
 	HWND		hWnd;			// Holds Our Window Handle
 	HINSTANCE	hInstance;		// Holds The Instance Of The Application
 
-	int width;					// Screen width
-	int height;					// Screen Height
+	Camera*		camera;			// Camera for rendering
 
 	bool		keys[256];		// Array Used For The Keyboard Routine
 	bool		active;			// Window Active Flag Set To TRUE By Default
-	bool		fullscreen;		// Fullscreen Flag Set To Fullscreen Mode By Default
-	bool		done;			// Bool Variable To Exit Loop
+	bool		fullscreen;		// Full screen Flag Set To Full screen Mode By Default
+	bool		done;			// Boolean Variable To Exit Loop
 
 	HANDLE		g_hMutex;
 

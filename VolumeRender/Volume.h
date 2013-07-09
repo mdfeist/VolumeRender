@@ -16,14 +16,13 @@ public:
 
 	void init();
 	bool needsInit();
-	void reset();
 
-	void render(int w, int h);
+	void render(Camera*);
 private:
 	bool initialized;
 
 	// Vertex Buffer Object
-	GLuint g_uiVerticesVBO;
+	GLuint cubeVerticesVBO;
 
 	// Frame Buffer Object
 	GLuint FBO;
