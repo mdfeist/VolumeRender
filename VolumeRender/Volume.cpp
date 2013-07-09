@@ -255,13 +255,14 @@ void Volume::createCube(float x, float y, float z) {
 		Vertex( float3( x, 0.0, z), float3(1.0, 0.0, 0.0))
 	};
 
-	// Create VBO
-	glGenBuffersARB( 1, &cubeVerticesVBO );
+	glGenBuffersARB( 1, &cubeVerticesVBO );						// Create VBO
 
-	// Copy the vertex data to the VBO
-	glBindBufferARB( GL_ARRAY_BUFFER_ARB, cubeVerticesVBO );
-	glBufferDataARB( GL_ARRAY_BUFFER_ARB, sizeof(cube_Vertices), cube_Vertices, GL_STATIC_DRAW_ARB );
-	glBindBufferARB( GL_ARRAY_BUFFER_ARB, 0 );
+	glBindBufferARB( GL_ARRAY_BUFFER_ARB, cubeVerticesVBO );	// Bind VBO buffer
+	glBufferDataARB( GL_ARRAY_BUFFER_ARB,						// Copy the vertex data to the VBO
+		sizeof(cube_Vertices),									// Get the size of cube_Vertices
+		cube_Vertices,											// Give the data for the vertices
+		GL_STATIC_DRAW_ARB );									// Tell the buffer that the data is not going to change
+	glBindBufferARB( GL_ARRAY_BUFFER_ARB, 0 );					// Unbind VBO buffer
 }
 
 void Volume::unbindFBO() {
@@ -269,44 +270,43 @@ void Volume::unbindFBO() {
 	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
 }
 
-GLuint Volume::setupFBO() {									// Create a new frame buffer for off screen rendering
+GLuint Volume::setupFBO() {													// Create a new frame buffer for off screen rendering
 	GLuint fbo_handle;
 
-	glGenFramebuffersEXT(1, &fbo_handle);					// Create buffer
-	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_handle);	// Bind buffer
+	glGenFramebuffersEXT(1, &fbo_handle);									// Create buffer
+	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_handle);					// Bind buffer
 
 	// The depth buffer
 	GLuint depthrenderbuffer;
-	glGenRenderbuffers(1, &depthrenderbuffer);				// Create depth buffer
-	glBindRenderbuffer(GL_RENDERBUFFER, depthrenderbuffer);	// Bind buffer
-	glRenderbufferStorage(GL_RENDERBUFFER,					// Create storage
-		GL_DEPTH_COMPONENT,									// Specify that the internal format is the depth component
-		TEXTURE_SIZE, TEXTURE_SIZE);						// Set storage width and height
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER,				// Attach depth buffer to frame buffer
-		GL_DEPTH_ATTACHMENT,								// Specify that the internal format is the depth component
-		GL_RENDERBUFFER, depthrenderbuffer);				// Attach depth render buffer texture to the frame buffer
+	glGenRenderbuffers(1, &depthrenderbuffer);								// Create depth buffer
+	glBindRenderbuffer(GL_RENDERBUFFER, depthrenderbuffer);					// Bind buffer
+	glRenderbufferStorage(GL_RENDERBUFFER,									// Create storage
+		GL_DEPTH_COMPONENT,													// Specify that the internal format is the depth component
+		TEXTURE_SIZE, TEXTURE_SIZE);										// Set storage width and height
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER,								// Attach depth buffer to frame buffer
+		GL_DEPTH_ATTACHMENT,												// Specify that the internal format is the depth component
+		GL_RENDERBUFFER, depthrenderbuffer);								// Attach depth render buffer texture to the frame buffer
 
-	errcheck();												// Check for errors
+	errcheck();																// Check for errors
 
-	unbindFBO();											// Unbind frame buffer object
+	unbindFBO();															// Unbind frame buffer object
 
-	return fbo_handle;										// Return new frame buffer
+	return fbo_handle;														// Return new frame buffer
 }
 
-bool Volume::bindFBO(GLuint fbo_handle, GLuint fbo_texture) {	// Bind frame buffer and attach texture for rendering
-	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_handle);		// Bind frame buffer
+bool Volume::bindFBO(GLuint fbo_handle, GLuint fbo_texture) {				// Bind frame buffer and attach texture for rendering
+	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_handle);					// Bind frame buffer
 
-	glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT,				// Set fbo_texture as our color attachment #0
+	glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT,							// Set fbo_texture as our color attachment #0
 		GL_COLOR_ATTACHMENT0_EXT,
 		GL_TEXTURE_2D, fbo_texture, 0);
 
 	//errcheck();
 
-	GLenum dbuffers[2] = { GL_COLOR_ATTACHMENT0_EXT };			// Set the list of draw buffers.
-	glDrawBuffers(1, dbuffers);									// Set Draw buffers
+	GLenum dbuffers[2] = { GL_COLOR_ATTACHMENT0_EXT };						// Set the list of draw buffers.
+	glDrawBuffers(1, dbuffers);												// Set Draw buffers
 	
-	// Always check that our frame buffer is ok
-	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) // Always check that our frame buffer is ok
 		return false;
 
 	return true;
