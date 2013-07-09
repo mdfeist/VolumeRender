@@ -55,11 +55,13 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\Users\mdfeist\Documents\opt\include\ITK-4.5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>cg.lib;cgGL.lib;glut32.lib;glew32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>cg.lib;cgGL.lib;glut32.lib;glew32.lib;ITKBiasCorrection-4.5.lib;ITKBioCell-4.5.lib;ITKCommon-4.5.lib;ITKDICOMParser-4.5.lib;itkdouble-conversion-4.5.lib;ITKEXPAT-4.5.lib;ITKFEM-4.5.lib;itkgdcmCommon-4.5.lib;itkgdcmDICT-4.5.lib;itkgdcmDSED-4.5.lib;itkgdcmIOD-4.5.lib;itkgdcmjpeg12-4.5.lib;itkgdcmjpeg16-4.5.lib;itkgdcmjpeg8-4.5.lib;itkgdcmMSFF-4.5.lib;ITKgiftiio-4.5.lib;itkhdf5-4.5.lib;itkhdf5_cpp-4.5.lib;ITKIOBioRad-4.5.lib;ITKIOBMP-4.5.lib;ITKIOCSV-4.5.lib;ITKIOGDCM-4.5.lib;ITKIOGE-4.5.lib;ITKIOGIPL-4.5.lib;ITKIOHDF5-4.5.lib;ITKIOImageBase-4.5.lib;ITKIOIPL-4.5.lib;ITKIOJPEG-4.5.lib;ITKIOLSM-4.5.lib;ITKIOMesh-4.5.lib;ITKIOMeta-4.5.lib;ITKIONIFTI-4.5.lib;ITKIONRRD-4.5.lib;ITKIOPNG-4.5.lib;ITKIOSiemens-4.5.lib;ITKIOSpatialObjects-4.5.lib;ITKIOStimulate-4.5.lib;ITKIOTIFF-4.5.lib;ITKIOTransformBase-4.5.lib;ITKIOTransformHDF5-4.5.lib;ITKIOTransformInsightLegacy-4.5.lib;ITKIOTransformMatlab-4.5.lib;ITKIOVTK-4.5.lib;ITKIOXML-4.5.lib;itkjpeg-4.5.lib;ITKKLMRegionGrowing-4.5.lib;ITKLabelMap-4.5.lib;ITKMesh-4.5.lib;ITKMetaIO-4.5.lib;itkNetlibSlatec-4.5.lib;ITKniftiio-4.5.lib;ITKNrrdIO-4.5.lib;itkopenjpeg-4.5.lib;ITKOptimizers-4.5.lib;ITKPath-4.5.lib;itkpng-4.5.lib;ITKPolynomials-4.5.lib;ITKQuadEdgeMesh-4.5.lib;ITKReview-4.5.lib;ITKSpatialObjects-4.5.lib;ITKStatistics-4.5.lib;itksys-4.5.lib;itktiff-4.5.lib;itkv3p_lsqr-4.5.lib;itkv3p_netlib-4.5.lib;itkvcl-4.5.lib;ITKVideoCore-4.5.lib;ITKVideoIO-4.5.lib;itkvnl-4.5.lib;ITKVNLInstantiation-4.5.lib;itkvnl_algo-4.5.lib;ITKVTK-4.5.lib;ITKWatersheds-4.5.lib;itkzlib-4.5.lib;ITKznz-4.5.lib;ws2_32.lib;comctl32.lib;wsock32.lib;rpcrt4.lib;Psapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\mdfeist\Documents\opt\lib\Debug;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -70,13 +72,15 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\Users\mdfeist\Documents\opt\include\ITK-4.5;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
-      <AdditionalDependencies>cg.lib;cgGL.lib;glut32.lib;glew32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>cg.lib;cgGL.lib;glut32.lib;glew32.lib;ITKBiasCorrection-4.5.lib;ITKBioCell-4.5.lib;ITKCommon-4.5.lib;ITKDICOMParser-4.5.lib;itkdouble-conversion-4.5.lib;ITKEXPAT-4.5.lib;ITKFEM-4.5.lib;itkgdcmCommon-4.5.lib;itkgdcmDICT-4.5.lib;itkgdcmDSED-4.5.lib;itkgdcmIOD-4.5.lib;itkgdcmjpeg12-4.5.lib;itkgdcmjpeg16-4.5.lib;itkgdcmjpeg8-4.5.lib;itkgdcmMSFF-4.5.lib;ITKgiftiio-4.5.lib;itkhdf5-4.5.lib;itkhdf5_cpp-4.5.lib;ITKIOBioRad-4.5.lib;ITKIOBMP-4.5.lib;ITKIOCSV-4.5.lib;ITKIOGDCM-4.5.lib;ITKIOGE-4.5.lib;ITKIOGIPL-4.5.lib;ITKIOHDF5-4.5.lib;ITKIOImageBase-4.5.lib;ITKIOIPL-4.5.lib;ITKIOJPEG-4.5.lib;ITKIOLSM-4.5.lib;ITKIOMesh-4.5.lib;ITKIOMeta-4.5.lib;ITKIONIFTI-4.5.lib;ITKIONRRD-4.5.lib;ITKIOPNG-4.5.lib;ITKIOSiemens-4.5.lib;ITKIOSpatialObjects-4.5.lib;ITKIOStimulate-4.5.lib;ITKIOTIFF-4.5.lib;ITKIOTransformBase-4.5.lib;ITKIOTransformHDF5-4.5.lib;ITKIOTransformInsightLegacy-4.5.lib;ITKIOTransformMatlab-4.5.lib;ITKIOVTK-4.5.lib;ITKIOXML-4.5.lib;itkjpeg-4.5.lib;ITKKLMRegionGrowing-4.5.lib;ITKLabelMap-4.5.lib;ITKMesh-4.5.lib;ITKMetaIO-4.5.lib;itkNetlibSlatec-4.5.lib;ITKniftiio-4.5.lib;ITKNrrdIO-4.5.lib;itkopenjpeg-4.5.lib;ITKOptimizers-4.5.lib;ITKPath-4.5.lib;itkpng-4.5.lib;ITKPolynomials-4.5.lib;ITKQuadEdgeMesh-4.5.lib;ITKReview-4.5.lib;ITKSpatialObjects-4.5.lib;ITKStatistics-4.5.lib;itksys-4.5.lib;itktiff-4.5.lib;itkv3p_lsqr-4.5.lib;itkv3p_netlib-4.5.lib;itkvcl-4.5.lib;ITKVideoCore-4.5.lib;ITKVideoIO-4.5.lib;itkvnl-4.5.lib;ITKVNLInstantiation-4.5.lib;itkvnl_algo-4.5.lib;ITKVTK-4.5.lib;ITKWatersheds-4.5.lib;itkzlib-4.5.lib;ITKznz-4.5.lib;ws2_32.lib;comctl32.lib;wsock32.lib;rpcrt4.lib;Psapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Users\mdfeist\Documents\opt\lib\Release;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>

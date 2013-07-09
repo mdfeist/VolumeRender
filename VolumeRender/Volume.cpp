@@ -1,11 +1,18 @@
 #include "StdAfx.h"
 #include "Volume.h"
 
+#include <Windows.h>
 #include <math.h>
 #include <stddef.h>
 
+#include "itkImage.h"
+#include "itkImageSeriesReader.h"
+#include "itkGDCMImageIO.h"
+#include "itkRGBAPixel.h"
+#include "itkGDCMSeriesFileNames.h"
+
 // All textures for the buffer are TEXTURE_SIZExTEXTURE_SIZE in dimensions
-#define TEXTURE_SIZE 512
+#define TEXTURE_SIZE 1024
 // Used to find the offset of variables in a structure (found when binding the VBO)
 #define MEMBER_OFFSET(s,m) ((char *)NULL + (offsetof(s,m)))
 // The size of the volume test data
@@ -52,6 +59,149 @@ struct Vertex										// Vertex used for creating VBO
 
 float length(float3 p) {							// Get the length of a float3
 	return sqrtf(p.x*p.x + p.y*p.y + p.z*p.z);
+}
+
+int Volume::loadVolume(char *directory) {
+	typedef signed short    PixelType;
+	const unsigned int      Dimension = 3;
+
+	typedef itk::Image< PixelType, Dimension >         ImageType;
+
+	typedef itk::ImageSeriesReader<ImageType> ReaderType; 
+	ReaderType::Pointer reader = ReaderType::New();
+	
+	typedef itk::GDCMImageIO       ImageIOType;
+	ImageIOType::Pointer dicomIO = ImageIOType::New();
+
+	reader->SetImageIO( dicomIO );
+
+	typedef itk::GDCMSeriesFileNames NamesGeneratorType;
+	NamesGeneratorType::Pointer nameGenerator = NamesGeneratorType::New();
+
+
+	nameGenerator->SetUseSeriesDetails( true );
+	nameGenerator->AddSeriesRestriction("0008|0021" );
+
+	nameGenerator->SetDirectory( directory );
+	
+	try
+	{
+		std::cout << std::endl << "The directory: " << std::endl;
+		std::cout << std::endl << directory << std::endl << std::endl;
+		std::cout << "Contains the following DICOM Series: ";
+		std::cout << std::endl << std::endl;
+
+		typedef std::vector< std::string >    SeriesIdContainer;
+		const SeriesIdContainer & seriesUID = nameGenerator->GetSeriesUIDs();
+		SeriesIdContainer::const_iterator seriesItr = seriesUID.begin();
+		SeriesIdContainer::const_iterator seriesEnd = seriesUID.end();
+		while( seriesItr != seriesEnd )
+		{
+			std::cout << seriesItr->c_str() << std::endl;
+			++seriesItr;
+		}
+
+
+		std::string seriesIdentifier;
+
+		//single series in folder
+		seriesIdentifier = seriesUID.begin()->c_str();
+
+		std::cout << std::endl << std::endl;
+		std::cout << "Now reading series: " << std::endl << std::endl;
+		std::cout << seriesIdentifier << std::endl;
+		std::cout << std::endl << std::endl;
+
+
+		typedef std::vector< std::string >   FileNamesContainer;
+		FileNamesContainer fileNames;
+		fileNames = nameGenerator->GetFileNames( seriesIdentifier );
+
+		// File names to Read
+		reader->SetFileNames( fileNames );
+
+		try
+		{
+			reader->Update();
+		}
+		catch (itk::ExceptionObject &ex)
+		{
+			std::cout << ex << std::endl;
+			return EXIT_FAILURE;
+		}
+
+		//Test Function: Get Dimention values
+		typedef itk::Image< PixelType, 3 >   ImageType;
+		ImageType::Pointer image = reader->GetOutput();
+
+
+		ImageType::RegionType region = image->GetLargestPossibleRegion();
+		ImageType::SizeType size = region.GetSize();
+
+		// Pointer to the start of the Image
+		signed short * bufferPointer = reader->GetOutput()->GetBufferPointer();
+
+		// Get number of pixels in image
+		int pixelCount = size[0] * size[1] *size[2];
+
+		width = size[0];
+		height = size[1];
+		depth = size[2];
+
+		// Get the Min and Max values for normalization
+		float maxValue = bufferPointer[0];
+		float minValue = bufferPointer[0];
+		for (int i = 1; i < pixelCount; i = i++)
+		{
+			if (bufferPointer[i] < minValue)
+			{
+				minValue = bufferPointer[i];
+			}
+
+			if (bufferPointer[i] > maxValue)
+			{
+				maxValue = bufferPointer[i];
+			}
+		}
+
+		// Create array for iso values
+		data = new GLubyte[pixelCount];
+
+		memset(data, 0, pixelCount);
+
+		// Normalize values
+		for (int i = 0; i < pixelCount; i = i++)
+		{
+			data[i] = 255*((float)bufferPointer[i])/(maxValue);
+		}
+	}
+	catch (itk::ExceptionObject &ex)
+    {
+		std::cout << ex << std::endl;
+		return EXIT_FAILURE;
+    }
+	
+	return EXIT_SUCCESS;
+
+}
+
+GLuint Volume::createVolume() {
+	GLuint volume_texture;
+	glPixelStorei(GL_UNPACK_ALIGNMENT,1);
+	glGenTextures(1, &volume_texture);
+	glBindTexture(GL_TEXTURE_3D, volume_texture);
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, width, height, depth, 0, GL_RED, GL_UNSIGNED_BYTE, data);
+
+	delete []data;
+	printf("volume texture created\n");
+
+	return volume_texture;
 }
 
 // create a test volume texture, here you could load your own volume
@@ -115,7 +265,6 @@ GLuint create_volumetexture()
 			
 	}}}
 
-
 	GLuint volume_texture;
 	glPixelStorei(GL_UNPACK_ALIGNMENT,1);
 	glGenTextures(1, &volume_texture);
@@ -176,10 +325,13 @@ GLuint newTexture(int width, int height) {
 	return texture;															// Return texture
 }
 
-Volume::Volume(void)														// Constructor
+Volume::Volume(void) : Actor()												// Constructor
 {
 	cubeVerticesVBO = 0;													// Set cubeVerticesVBO to NULL
 	initialized = false;													// Set initialized to false
+
+	position = Eigen::Vector3f(0, 0, 0);
+	rotation = Eigen::Quaternionf::Identity();
 }
 
 
@@ -198,8 +350,8 @@ void Volume::init() {
 	front_facing = newTexture(TEXTURE_SIZE, TEXTURE_SIZE);
 	back_facing = newTexture(TEXTURE_SIZE, TEXTURE_SIZE);
 
-	char file[] = "shader/raycast.cg";
-	if (setupCg(&context, &fProgram, &fragmentProfile, file)) {
+	char shaderFile[] = "shader/raycast.cg";
+	if (setupCg(&context, &fProgram, &fragmentProfile, shaderFile)) {
 		fprintf(stderr, "Error: %s\n", "Initializing Cg");
 		CheckCgError();
 	}
@@ -211,7 +363,8 @@ void Volume::init() {
 
 	createCube(1.0f, 1.0f, 1.0f);
 
-	volume_texture = create_volumetexture();
+	volume_texture = createVolume();
+	//volume_texture = create_volumetexture();
 
 	initialized = true;
 }
@@ -370,18 +523,33 @@ void Volume::render(Camera* camera) {
 	int width = camera->getWidth();
 	int height = camera->getHeight();
 
-	glViewport(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);		// Set Viewport
-	glMatrixMode(GL_PROJECTION);						// Update projection
+	glViewport(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);			// Set Viewport
+	glMatrixMode(GL_PROJECTION);							// Update projection
 	glPushMatrix();
-	glLoadIdentity();									// Load Identity
-	gluPerspective(camera->getFOV(),					// Set Field of View
-		(GLfloat)width/(GLfloat)height,					// Set aspect ratio
-		camera->getNearClipping(),						// Set near clipping
-		camera->getFarClipping());						// Set far clipping
-	glMatrixMode(GL_MODELVIEW);							// Change back to model view mode
-	glPushMatrix(); //set where to start the current object
+	glLoadIdentity();										// Load Identity
+	gluPerspective(camera->getFOV(),						// Set Field of View
+		(GLfloat)width/(GLfloat)height,						// Set aspect ratio
+		camera->getNearClipping(),							// Set near clipping
+		camera->getFarClipping());							// Set far clipping
+	glMatrixMode(GL_MODELVIEW);								// Change back to model view mode
+	glPushMatrix();											// set where to start the current object
 
-	glTranslatef(-0.5,-0.5,-0.5); // center the texturecube
+	glTranslatef(position.x(), position.y(), position.z());	// set position of the texture cube
+
+	// Convert rotation quaternion into axis angle
+	float rotationScale = sqrt(								// Get length of quaternion
+		rotation.x() * rotation.x() + 
+		rotation.y() * rotation.y()  + 
+		rotation.z() * rotation.z());
+
+	float x = rotation.x() / rotationScale;					// Get axis x value
+	float y = rotation.y() / rotationScale;					// Get axis y value
+	float z = rotation.z() / rotationScale;					// Get axis z value
+	float angle = (acos(rotation.w())*2.0f)*(180.f/M_PI);	// Get rotation angle
+
+	glRotatef(angle, x, y, z);								// set rotation of the texture cube
+
+	glTranslatef(-0.5, -0.5, -0.5);							// center the texture cube
 
 	// We need to enable the client stats for the vertex attributes we want 
 	// to render even if we are not using client-side vertex arrays.

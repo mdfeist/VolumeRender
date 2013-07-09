@@ -14,6 +14,8 @@ public:
 	Volume(void);
 	~Volume(void);
 
+	int loadVolume(char *directory);
+
 	void init();
 	bool needsInit();
 
@@ -41,6 +43,7 @@ private:
 	CGparameter cgStepSize;
 
 	void createCube(float x, float y, float z);
+	GLuint createVolume();
 
 	// FBO
 	GLuint setupFBO();
@@ -50,5 +53,8 @@ private:
 	// CG
 	int setupCg(CGcontext *context, CGprogram *fProgram, 
 			CGprofile *fragmentProfile, char *file);
+
+	GLubyte *data;
+	int width, height, depth;
 };
 
