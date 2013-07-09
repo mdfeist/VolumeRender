@@ -107,6 +107,10 @@ Eigen::Vector3f Camera::getRightVector() {
     return out;
 }
 
+Eigen::Quaternionf Camera::getLookAt(float x, float y, float z) {
+	return getLookAt(Eigen::Vector3f( x, y, z ));
+}
+
 Eigen::Quaternionf Camera::getLookAt(Eigen::Vector3f &lookAt) {
 	Eigen::Vector3f diff = lookAt - position;
 	float length = diff.norm();
@@ -115,9 +119,29 @@ Eigen::Quaternionf Camera::getLookAt(Eigen::Vector3f &lookAt) {
     float angleY = atan2f(diff.z(), diff.x()) + (float)M_PI/2.0f;
     float angleZ = 0.0f;
 
-	Eigen::Quaternionf roation(Eigen::AngleAxisf(angleX, Eigen::Vector3f::UnitX())
+	Eigen::Quaternionf roation(
+		Eigen::AngleAxisf(angleX, Eigen::Vector3f::UnitX())
 		* Eigen::AngleAxisf(angleY, Eigen::Vector3f::UnitY())
 		* Eigen::AngleAxisf(angleZ, Eigen::Vector3f::UnitZ()));
 
 	return roation;
+}
+
+void Camera::lookAt(float x, float y, float z) {
+	lookAt(Eigen::Vector3f( x, y, z ));
+}
+
+void Camera::lookAt(Eigen::Vector3f &lookAt) {
+	setRotation(getLookAt(lookAt));
+}
+
+void Camera::follow(Eigen::Vector3f goTo, float distance) {
+	Eigen::Vector3f diff = position - goTo;
+
+	float length = diff.norm();
+
+	if (length > distance) {
+        float speed = (distance-length)/distance;
+        increasePosition(diff.x()*speed, diff.y()*speed, diff.z()*speed);
+    }
 }

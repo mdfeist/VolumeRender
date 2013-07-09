@@ -137,9 +137,9 @@ void Renderer::render() {								// Render the scene
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);	// Clear screen (Color and Depth)
 	glLoadIdentity();									// Load Identity
-
-	glRotatef(10,1,0,0);								// Set Camera
-	glTranslatef(0,-0.5,-2.25);
+			
+	glTranslatef(0, 0, -2.25);							// Set Camera Position
+	glRotatef(25,1,0,0);
 	glRotatef(rot,0,1,0);
 
 	for each (Actor* a in actors) {						// Loop through actors

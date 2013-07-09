@@ -43,7 +43,13 @@ public:
 	Eigen::Vector3f getUpVector();
 	Eigen::Vector3f getRightVector();
 
+	Eigen::Quaternionf getLookAt(float x, float y, float z);
 	Eigen::Quaternionf getLookAt(Eigen::Vector3f &lookAt);
+
+	void lookAt(float x, float y, float z);
+	void lookAt(Eigen::Vector3f &lookAt);
+
+	void follow(Eigen::Vector3f goTo, float distance);
 
 private:
 	float fov;								// Field of View
