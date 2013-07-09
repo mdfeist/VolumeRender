@@ -38,7 +38,7 @@ private:
 	CGprogram fProgram;
 	CGparameter cgFrontTexData;
 	CGparameter cgBackTexData;
-	CGparameter cgVolumeexData;
+	CGparameter cgVolumeTexData;
 	CGparameter cgStepSize;
 
 	void createCube(float x, float y, float z);

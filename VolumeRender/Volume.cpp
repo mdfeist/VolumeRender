@@ -189,7 +189,7 @@ void Volume::init() {
 
 	cgFrontTexData = cgGetNamedParameter(fProgram, "frontTexData");
 	cgBackTexData = cgGetNamedParameter(fProgram, "backTexData");
-	cgVolumeexData = cgGetNamedParameter(fProgram, "volume_tex");
+	cgVolumeTexData = cgGetNamedParameter(fProgram, "volume_tex");
 	cgStepSize = cgGetNamedParameter(fProgram, "stepSize");
 
 	createCube(1.0f, 1.0f, 1.0f);
@@ -420,17 +420,15 @@ void Volume::render(int w, int h) {
 	cgGLBindProgram(fProgram);
 	CheckCgError();
 
-	glBindTexture(GL_TEXTURE_2D, back_facing);
-
-	cgGLSetParameter1f(cgStepSize, 1.0f/50.0f);
+	cgGLSetParameter1f(cgStepSize, 1.0f/50.0f);					// Set the incremental step size of the ray cast
 
 	// enable Cg shader and texture (a 'compute' fragment program)
-	cgGLSetTextureParameter(cgFrontTexData, front_facing);
-	cgGLSetTextureParameter(cgBackTexData, back_facing);
-	cgGLSetTextureParameter(cgVolumeexData, volume_texture);
-	cgGLEnableTextureParameter(cgFrontTexData);
-	cgGLEnableTextureParameter(cgBackTexData);
-	cgGLEnableTextureParameter(cgVolumeexData);
+	cgGLSetTextureParameter(cgFrontTexData, front_facing);		// Bind front facing render to cgFrontTexData
+	cgGLSetTextureParameter(cgBackTexData, back_facing);		// Bind back facing render to cgBackTexData
+	cgGLSetTextureParameter(cgVolumeTexData, volume_texture);	// Bind the voulume_texture to cgVolumeTexData
+	cgGLEnableTextureParameter(cgFrontTexData);					// Enable cgFrontTexData
+	cgGLEnableTextureParameter(cgBackTexData);					// Enable cgBackTexData
+	cgGLEnableTextureParameter(cgVolumeTexData);				// Enable cgVolumeTexData
 	
 	glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
 	
