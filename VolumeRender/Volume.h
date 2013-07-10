@@ -55,6 +55,6 @@ private:
 			CGprofile *fragmentProfile, char *file);
 
 	GLubyte *data;
-	int width, height, depth;
+	int volumeWidth, volumeHeight, volumeDepth;
 };
 

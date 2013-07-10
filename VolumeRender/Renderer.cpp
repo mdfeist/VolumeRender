@@ -137,7 +137,7 @@ void Renderer::addActor(Actor* a) {						// Add actor to scene
 
 void Renderer::render() {								// Render the scene
 	static float rot = 0.0f;							// Rotation value
-	rot += 0.5f;										// Update Rotation
+	rot += 0.75f;										// Update Rotation
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);	// Clear screen (Color and Depth)
 	glLoadIdentity();									// Load Identity

@@ -61,149 +61,6 @@ float length(float3 p) {							// Get the length of a float3
 	return sqrtf(p.x*p.x + p.y*p.y + p.z*p.z);
 }
 
-int Volume::loadVolume(char *directory) {
-	typedef signed short    PixelType;
-	const unsigned int      Dimension = 3;
-
-	typedef itk::Image< PixelType, Dimension >         ImageType;
-
-	typedef itk::ImageSeriesReader<ImageType> ReaderType; 
-	ReaderType::Pointer reader = ReaderType::New();
-	
-	typedef itk::GDCMImageIO       ImageIOType;
-	ImageIOType::Pointer dicomIO = ImageIOType::New();
-
-	reader->SetImageIO( dicomIO );
-
-	typedef itk::GDCMSeriesFileNames NamesGeneratorType;
-	NamesGeneratorType::Pointer nameGenerator = NamesGeneratorType::New();
-
-
-	nameGenerator->SetUseSeriesDetails( true );
-	nameGenerator->AddSeriesRestriction("0008|0021" );
-
-	nameGenerator->SetDirectory( directory );
-	
-	try
-	{
-		std::cout << std::endl << "The directory: " << std::endl;
-		std::cout << std::endl << directory << std::endl << std::endl;
-		std::cout << "Contains the following DICOM Series: ";
-		std::cout << std::endl << std::endl;
-
-		typedef std::vector< std::string >    SeriesIdContainer;
-		const SeriesIdContainer & seriesUID = nameGenerator->GetSeriesUIDs();
-		SeriesIdContainer::const_iterator seriesItr = seriesUID.begin();
-		SeriesIdContainer::const_iterator seriesEnd = seriesUID.end();
-		while( seriesItr != seriesEnd )
-		{
-			std::cout << seriesItr->c_str() << std::endl;
-			++seriesItr;
-		}
-
-
-		std::string seriesIdentifier;
-
-		//single series in folder
-		seriesIdentifier = seriesUID.begin()->c_str();
-
-		std::cout << std::endl << std::endl;
-		std::cout << "Now reading series: " << std::endl << std::endl;
-		std::cout << seriesIdentifier << std::endl;
-		std::cout << std::endl << std::endl;
-
-
-		typedef std::vector< std::string >   FileNamesContainer;
-		FileNamesContainer fileNames;
-		fileNames = nameGenerator->GetFileNames( seriesIdentifier );
-
-		// File names to Read
-		reader->SetFileNames( fileNames );
-
-		try
-		{
-			reader->Update();
-		}
-		catch (itk::ExceptionObject &ex)
-		{
-			std::cout << ex << std::endl;
-			return EXIT_FAILURE;
-		}
-
-		//Test Function: Get Dimention values
-		typedef itk::Image< PixelType, 3 >   ImageType;
-		ImageType::Pointer image = reader->GetOutput();
-
-
-		ImageType::RegionType region = image->GetLargestPossibleRegion();
-		ImageType::SizeType size = region.GetSize();
-
-		// Pointer to the start of the Image
-		signed short * bufferPointer = reader->GetOutput()->GetBufferPointer();
-
-		// Get number of pixels in image
-		int pixelCount = size[0] * size[1] *size[2];
-
-		width = size[0];
-		height = size[1];
-		depth = size[2];
-
-		// Get the Min and Max values for normalization
-		float maxValue = bufferPointer[0];
-		float minValue = bufferPointer[0];
-		for (int i = 1; i < pixelCount; i = i++)
-		{
-			if (bufferPointer[i] < minValue)
-			{
-				minValue = bufferPointer[i];
-			}
-
-			if (bufferPointer[i] > maxValue)
-			{
-				maxValue = bufferPointer[i];
-			}
-		}
-
-		// Create array for iso values
-		data = new GLubyte[pixelCount];
-
-		memset(data, 0, pixelCount);
-
-		// Normalize values
-		for (int i = 0; i < pixelCount; i = i++)
-		{
-			data[i] = 255*((float)bufferPointer[i])/(maxValue);
-		}
-	}
-	catch (itk::ExceptionObject &ex)
-    {
-		std::cout << ex << std::endl;
-		return EXIT_FAILURE;
-    }
-	
-	return EXIT_SUCCESS;
-
-}
-
-GLuint Volume::createVolume() {
-	GLuint volume_texture;
-	glPixelStorei(GL_UNPACK_ALIGNMENT,1);
-	glGenTextures(1, &volume_texture);
-	glBindTexture(GL_TEXTURE_3D, volume_texture);
-	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
-	glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, width, height, depth, 0, GL_RED, GL_UNSIGNED_BYTE, data);
-
-	delete []data;
-	printf("volume texture created\n");
-
-	return volume_texture;
-}
-
 // create a test volume texture, here you could load your own volume
 GLuint create_volumetexture()
 {
@@ -373,6 +230,151 @@ bool Volume::needsInit() {
 	return !initialized;
 }
 
+int Volume::loadVolume(char *directory) {
+	typedef signed short    PixelType;
+	const unsigned int      Dimension = 3;
+
+	typedef itk::Image< PixelType, Dimension >         ImageType;
+
+	typedef itk::ImageSeriesReader<ImageType> ReaderType; 
+	ReaderType::Pointer reader = ReaderType::New();
+	
+	typedef itk::GDCMImageIO       ImageIOType;
+	ImageIOType::Pointer dicomIO = ImageIOType::New();
+
+	reader->SetImageIO( dicomIO );
+
+	typedef itk::GDCMSeriesFileNames NamesGeneratorType;
+	NamesGeneratorType::Pointer nameGenerator = NamesGeneratorType::New();
+
+
+	nameGenerator->SetUseSeriesDetails( true );
+	nameGenerator->AddSeriesRestriction("0008|0021" );
+
+	nameGenerator->SetDirectory( directory );
+	
+	try
+	{
+		std::cout << std::endl << "The directory: " << std::endl;
+		std::cout << std::endl << directory << std::endl << std::endl;
+		std::cout << "Contains the following DICOM Series: ";
+		std::cout << std::endl << std::endl;
+
+		typedef std::vector< std::string >    SeriesIdContainer;
+		const SeriesIdContainer & seriesUID = nameGenerator->GetSeriesUIDs();
+		SeriesIdContainer::const_iterator seriesItr = seriesUID.begin();
+		SeriesIdContainer::const_iterator seriesEnd = seriesUID.end();
+		while( seriesItr != seriesEnd )
+		{
+			std::cout << seriesItr->c_str() << std::endl;
+			++seriesItr;
+		}
+
+
+		std::string seriesIdentifier;
+
+		//single series in folder
+		seriesIdentifier = seriesUID.begin()->c_str();
+
+		std::cout << std::endl << std::endl;
+		std::cout << "Now reading series: " << std::endl << std::endl;
+		std::cout << seriesIdentifier << std::endl;
+		std::cout << std::endl << std::endl;
+
+
+		typedef std::vector< std::string >   FileNamesContainer;
+		FileNamesContainer fileNames;
+		fileNames = nameGenerator->GetFileNames( seriesIdentifier );
+
+		// File names to Read
+		reader->SetFileNames( fileNames );
+
+		try
+		{
+			reader->Update();
+		}
+		catch (itk::ExceptionObject &ex)
+		{
+			std::cout << ex << std::endl;
+			return EXIT_FAILURE;
+		}
+
+		//Test Function: Get Dimention values
+		typedef itk::Image< PixelType, 3 >   ImageType;
+		ImageType::Pointer image = reader->GetOutput();
+
+
+		ImageType::RegionType region = image->GetLargestPossibleRegion();
+		ImageType::SizeType size = region.GetSize();
+
+		// Pointer to the start of the Image
+		signed short * bufferPointer = reader->GetOutput()->GetBufferPointer();
+
+		// Get number of pixels in image
+		int pixelCount = size[0] * size[1] *size[2];
+
+		volumeWidth = size[0];
+		volumeHeight = size[1];
+		volumeDepth = size[2];
+
+		// Get the Min and Max values for normalization
+		float maxValue = bufferPointer[0];
+		float minValue = bufferPointer[0];
+		for (int i = 1; i < pixelCount; i = i++)
+		{
+			if (bufferPointer[i] < minValue)
+			{
+				minValue = bufferPointer[i];
+			}
+
+			if (bufferPointer[i] > maxValue)
+			{
+				maxValue = bufferPointer[i];
+			}
+		}
+
+		// Create array for iso values
+		data = new GLubyte[pixelCount * 4];
+
+		memset(data, 255, pixelCount * 4);
+
+		// Normalize values
+		for (int i = 0; i < pixelCount; i = i++)
+		{
+			data[4*i + 3] = 255*((float)bufferPointer[i] - minValue)/(maxValue - minValue);
+		}
+	}
+	catch (itk::ExceptionObject &ex)
+    {
+		std::cout << ex << std::endl;
+		return EXIT_FAILURE;
+    }
+	
+	return EXIT_SUCCESS;
+
+}
+
+GLuint Volume::createVolume() {
+	GLuint volume_texture;
+	glPixelStorei(GL_UNPACK_ALIGNMENT,1);
+	glGenTextures(1, &volume_texture);
+	glBindTexture(GL_TEXTURE_3D, volume_texture);
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, 
+		volumeWidth, volumeHeight, volumeDepth, 
+		0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+
+	delete []data;
+	printf("volume texture created\n");
+
+	return volume_texture;
+}
+
 void Volume::createCube(float x, float y, float z) {
 	// Define the 24 vertices of a unit cube
 	Vertex cube_Vertices[24] = {
@@ -533,6 +535,11 @@ void Volume::render(Camera* camera) {
 		camera->getFarClipping());							// Set far clipping
 	glMatrixMode(GL_MODELVIEW);								// Change back to model view mode
 	glPushMatrix();											// set where to start the current object
+
+	glScalef(
+		1.0f, 
+		(float)volumeHeight/volumeWidth, 
+		(float)volumeDepth/volumeWidth);
 
 	glTranslatef(position.x(), position.y(), position.z());	// set position of the texture cube
 

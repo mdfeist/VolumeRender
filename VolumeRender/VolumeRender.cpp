@@ -15,6 +15,8 @@ int main(int argc, char* argv[])
 {
 	Volume* volume = new Volume();
 	//volume->setPosition(2.0, 0.0, 0.0);
+	Eigen::Quaternionf rotation(Eigen::AngleAxisf(-M_PI/2.0, Eigen::Vector3f(1.0, 0.0, 0.0)));
+	volume->setRotation(rotation);
 	
 	char volumeFile[] = "C:/Users/mdfeist/Desktop/COU IV";
 	volume->loadVolume(volumeFile);
