@@ -86,7 +86,11 @@
   <ItemGroup>
     <None Include="ReadMe.txt" />
     <None Include="shader\raycast.cg" />
+    <None Include="shader\raycastDiffuse.cg" />
     <None Include="shader\simple.cg" />
+	<Content Include="shader/*">
+     	 <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Actor.h" />

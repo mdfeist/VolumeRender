@@ -21,11 +21,11 @@ void main(float2  texCoord : TEXCOORD0,
 	float alpha_sample;
 	
 	if (length_ray != 0.0f) {
-		for(int i = 0; i < 450; i++) // 450 default
+		for(int i = 0; i < 150; i++) // 450 default
 		{
 			color_sample = tex3D(volume_tex, vector);
-			alpha_sample = color_sample.a * stepSize;
-			col_acc += (1.0f - alpha_acc) * color_sample * alpha_sample * 3.0f;
+			alpha_sample = color_sample.r * stepSize;
+			col_acc += (1.0f - alpha_acc) * float4(1, 1, 1, color_sample.r) * alpha_sample * 3.0f;
 			alpha_acc += alpha_sample;
 			vector += delta_dir;
 			length_acc += delta_dir_len;

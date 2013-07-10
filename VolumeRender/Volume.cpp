@@ -203,11 +203,13 @@ Volume::~Volume(void)														// Destructor
 
 void Volume::init() {
 	FBO = setupFBO();
+	printf("FBO created\n");
 
 	front_facing = newTexture(TEXTURE_SIZE, TEXTURE_SIZE);
 	back_facing = newTexture(TEXTURE_SIZE, TEXTURE_SIZE);
+	printf("Textures created\n");
 
-	char shaderFile[] = "shader/raycast.cg";
+	char shaderFile[] = "shader/raycastDiffuse.cg";
 	if (setupCg(&context, &fProgram, &fragmentProfile, shaderFile)) {
 		fprintf(stderr, "Error: %s\n", "Initializing Cg");
 		CheckCgError();
@@ -219,8 +221,10 @@ void Volume::init() {
 	cgStepSize = cgGetNamedParameter(fProgram, "stepSize");
 
 	createCube(1.0f, 1.0f, 1.0f);
+	printf("Cube created\n");
 
 	volume_texture = createVolume();
+	printf("volume texture created\n");
 	//volume_texture = create_volumetexture();
 
 	initialized = true;
@@ -255,8 +259,7 @@ int Volume::loadVolume(char *directory) {
 	
 	try
 	{
-		std::cout << std::endl << "The directory: " << std::endl;
-		std::cout << std::endl << directory << std::endl << std::endl;
+		std::cout << std::endl << "The directory: " << directory << std::endl;
 		std::cout << "Contains the following DICOM Series: ";
 		std::cout << std::endl << std::endl;
 
@@ -277,8 +280,8 @@ int Volume::loadVolume(char *directory) {
 		seriesIdentifier = seriesUID.begin()->c_str();
 
 		std::cout << std::endl << std::endl;
-		std::cout << "Now reading series: " << std::endl << std::endl;
-		std::cout << seriesIdentifier << std::endl;
+		std::cout << "Now reading series: ";
+		std::cout << seriesIdentifier;
 		std::cout << std::endl << std::endl;
 
 
@@ -288,21 +291,25 @@ int Volume::loadVolume(char *directory) {
 
 		// File names to Read
 		reader->SetFileNames( fileNames );
+		std::cout << "- Reading files ... ";
 
 		try
 		{
-			reader->Update();
+			reader->UpdateLargestPossibleRegion();
+			std::cout << "Successfully read " << fileNames.size() << " file(s)." << std::endl;
 		}
 		catch (itk::ExceptionObject &ex)
 		{
+			std::cout << "Failed."<< std::endl;
+			std::cout <<"*********************************************************************" <<std::endl;
 			std::cout << ex << std::endl;
+			std::cout << "*********************************************************************" <<std::endl;
 			return EXIT_FAILURE;
 		}
 
 		//Test Function: Get Dimention values
 		typedef itk::Image< PixelType, 3 >   ImageType;
 		ImageType::Pointer image = reader->GetOutput();
-
 
 		ImageType::RegionType region = image->GetLargestPossibleRegion();
 		ImageType::SizeType size = region.GetSize();
@@ -317,31 +324,34 @@ int Volume::loadVolume(char *directory) {
 		volumeHeight = size[1];
 		volumeDepth = size[2];
 
-		// Get the Min and Max values for normalization
-		float maxValue = bufferPointer[0];
-		float minValue = bufferPointer[0];
-		for (int i = 1; i < pixelCount; i = i++)
-		{
-			if (bufferPointer[i] < minValue)
-			{
-				minValue = bufferPointer[i];
-			}
+		std::cout << "- Volume Size: " 
+			<< "[" 
+			<< volumeWidth << ", "
+			<< volumeHeight << ", "
+			<< volumeDepth
+			<< "]" << std::endl;
 
-			if (bufferPointer[i] > maxValue)
-			{
-				maxValue = bufferPointer[i];
-			}
-		}
 
 		// Create array for iso values
-		data = new GLubyte[pixelCount * 4];
+		data = new GLubyte[pixelCount];
+		memset(data, 255, pixelCount);
 
-		memset(data, 255, pixelCount * 4);
+		std::cout << "- Normalizing data" << std::endl; 
+
+		float min = -500.f;
+		float max = 700.f;
 
 		// Normalize values
 		for (int i = 0; i < pixelCount; i = i++)
 		{
-			data[4*i + 3] = 255*((float)bufferPointer[i] - minValue)/(maxValue - minValue);
+			float normal = ((float)bufferPointer[i] - min)/(max - min);
+
+			if (normal < 0.f)
+				normal = 0.f;
+			else if (normal > 1.f)
+				normal = 1.f;
+
+			data[i] = 255*normal;
 		}
 	}
 	catch (itk::ExceptionObject &ex)
@@ -365,12 +375,11 @@ GLuint Volume::createVolume() {
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
-	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, 
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, 
 		volumeWidth, volumeHeight, volumeDepth, 
-		0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+		0, GL_RED, GL_UNSIGNED_BYTE, data);
 
 	delete []data;
-	printf("volume texture created\n");
 
 	return volume_texture;
 }
@@ -541,6 +550,8 @@ void Volume::render(Camera* camera) {
 		(float)volumeHeight/volumeWidth, 
 		(float)volumeDepth/volumeWidth);
 
+	glScalef(3.f, 3.f, 3.f);
+
 	glTranslatef(position.x(), position.y(), position.z());	// set position of the texture cube
 
 	// Convert rotation quaternion into axis angle
@@ -615,7 +626,7 @@ void Volume::render(Camera* camera) {
 	cgGLBindProgram(fProgram);
 	CheckCgError();
 
-	cgGLSetParameter1f(cgStepSize, 1.0f/50.0f);					// Set the incremental step size of the ray cast
+	cgGLSetParameter1f(cgStepSize, 1.0f/100.0f);				// Set the incremental step size of the ray cast
 
 	// enable Cg shader and texture (a 'compute' fragment program)
 	cgGLSetTextureParameter(cgFrontTexData, front_facing);		// Bind front facing render to cgFrontTexData

@@ -6,7 +6,12 @@ public:
     virtual ~Runnable() {}
     static DWORD WINAPI createThread(LPVOID args) {
         Runnable *prunnable = static_cast<Runnable*>(args);
-        return prunnable->runThread();
+		DWORD ret = prunnable->runThread();
+
+		// _endthread given to terminate
+		_endthread();
+
+        return ret;
     }
  protected:
     virtual DWORD runThread() = 0;

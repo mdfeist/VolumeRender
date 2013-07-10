@@ -30,8 +30,18 @@ public:
 	void setClearColor(float r, float g, float b, float a);
 
 	void addActor(Actor* a);
-
 	Camera* getActiveCamera();
+
+	bool isRunning();
+	bool isActive();
+
+	int getWindowWidth();
+	int getWindowHeight();
+
+	bool windowNeedsResize();
+
+	void resize(int width, int height);
+	void render();
 protected:
 	DWORD runThread();
 private:
@@ -41,6 +51,9 @@ private:
 	HINSTANCE	hInstance;		// Holds The Instance Of The Application
 
 	Camera*		camera;			// Camera for rendering
+	int			windowWidth;	// The width of the window
+	int			windowHeight;	// The height of the window
+	bool		needsResize;	// OpenGL needs to be resized
 
 	bool		keys[256];		// Array Used For The Keyboard Routine
 	bool		active;			// Window Active Flag Set To TRUE By Default
@@ -65,8 +78,7 @@ private:
 	void KillGLWindow();
 	BOOL CreateGLWindow(LPCWSTR title, int width, int height, int bits, bool fullscreenflag);
 
-	void render();
-	void resize(int width, int height);
+	void resizeWindow(int width, int height);
 
 	void setActive(bool value);
 	void setKey(WPARAM key, bool value);

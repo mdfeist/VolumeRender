@@ -33,7 +33,7 @@ int main(int argc, char* argv[])
 		//volume->setRotation(rotation);
 
 		//angle += 0.1f;
-		Sleep(1000);
+		Sleep(100);
 	}
 
 	return 0;

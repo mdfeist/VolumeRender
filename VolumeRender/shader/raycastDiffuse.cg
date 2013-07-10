@@ -1,0 +1,38 @@
+void main(float2  texCoord : TEXCOORD0,
+	  uniform sampler2D frontTexData,
+	  uniform sampler2D backTexData,
+	  uniform sampler3D volume_tex,
+	  uniform float stepSize,
+	  out float4 color0 : COLOR0)
+{	
+	float3 front = tex2D(frontTexData, texCoord).xyz;
+    float3 back = tex2D(backTexData, texCoord).xyz;
+	float3 dir = normalize(back - front);
+	float3 step = dir * stepSize;
+
+	float3 pos = front;
+
+	float4 dst = float4(0,0,0,0);
+	float4 value = 0;
+
+	float alpha_acc = 0;
+	float alpha_sample = 0;
+	
+	for(int i = 0; i < 150; i++) // 450 default
+	{
+		value = tex3D(volume_tex, pos);
+		alpha_sample = value.r * stepSize;
+		dst += (1.0f - alpha_acc) * float4(1, 1, 1, value.r) * alpha_sample * 3.0f;
+		alpha_acc += alpha_sample;
+
+		if (alpha_acc >= 0.95f)
+			break;
+
+		pos += step;
+
+		if(pos.x > 1.0f || pos.y > 1.0f || pos.z > 1.0f) 
+			break;
+	}
+
+	color0 = dst;
+}	
