@@ -1,7 +1,8 @@
 void main(float2  texCoord : TEXCOORD0,
 	  uniform sampler2D frontTexData,
 	  uniform sampler2D backTexData,
-	  uniform sampler3D volume_tex,
+	  uniform sampler3D VolumeS,
+	  uniform sampler1D TransferS,
 	  uniform float stepSize,
 	  out float4 color0 : COLOR0)
 {	
@@ -13,6 +14,8 @@ void main(float2  texCoord : TEXCOORD0,
 	float3 pos = front;
 
 	float4 dst = float4(0,0,0,0);
+	float4 src = 0;
+
 	float4 value = 0;
 
 	float alpha_acc = 0;
@@ -20,9 +23,10 @@ void main(float2  texCoord : TEXCOORD0,
 	
 	for(int i = 0; i < 150; i++) // 450 default
 	{
-		value = tex3D(volume_tex, pos);
-		alpha_sample = value.r * stepSize;
-		dst += (1.0f - alpha_acc) * float4(1, 1, 1, value.r) * alpha_sample * 3.0f;
+		value = tex3D(VolumeS, pos);
+
+		alpha_sample = value.a * stepSize;
+		dst += (1.0f - alpha_acc) * value * alpha_sample * 3.0f;
 		alpha_acc += alpha_sample;
 
 		if (alpha_acc >= 0.95f)
@@ -34,5 +38,5 @@ void main(float2  texCoord : TEXCOORD0,
 			break;
 	}
 
-	color0 = dst;
+	color0 = dst; //tex1D(TransferS, dst.a);
 }	

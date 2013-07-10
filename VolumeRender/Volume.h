@@ -8,6 +8,10 @@
 
 #include <GL\glut.h>
 
+#include <vector>
+
+class TransferControlPoint;
+
 class Volume : public Actor
 {
 public:
@@ -32,6 +36,7 @@ private:
 	GLuint front_facing;
 	GLuint back_facing;
 	GLuint volume_texture;
+	GLuint transferTexture;
 	
 	// CG variables
 	CGcontext context;
@@ -40,10 +45,18 @@ private:
 	CGparameter cgFrontTexData;
 	CGparameter cgBackTexData;
 	CGparameter cgVolumeTexData;
+	CGparameter cgTransferTexData;
 	CGparameter cgStepSize;
 
 	void createCube(float x, float y, float z);
 	GLuint createVolume();
+	void computeTransferFunction();
+	void generateGradients(int sampleSize);
+	void filterNxNxN(int n);
+	Eigen::Vector3f sampleNxNxN(int x, int y, int z, int n);
+	float sampleVolume(int x, int y, int z);
+	Eigen::Vector3f sampleGradients(int x, int y, int z);
+	bool isInBounds(int x, int y, int z);
 
 	// FBO
 	GLuint setupFBO();
@@ -54,7 +67,16 @@ private:
 	int setupCg(CGcontext *context, CGprogram *fProgram, 
 			CGprofile *fragmentProfile, char *file);
 
+	// Volume
+	int pixelCount;
 	GLubyte *data;
 	int volumeWidth, volumeHeight, volumeDepth;
+
+	GLubyte* transfer;
+	float *mGradients;
+	float *mSamples;
+
+	std::vector<TransferControlPoint*> colorKnots;
+	std::vector<TransferControlPoint*> alphaKnots;
 };
 

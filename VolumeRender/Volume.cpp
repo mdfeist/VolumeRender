@@ -11,6 +11,8 @@
 #include "itkRGBAPixel.h"
 #include "itkGDCMSeriesFileNames.h"
 
+#include "TransferControlPoint.h"
+
 // All textures for the buffer are TEXTURE_SIZExTEXTURE_SIZE in dimensions
 #define TEXTURE_SIZE 1024
 // Used to find the offset of variables in a structure (found when binding the VBO)
@@ -60,6 +62,131 @@ struct Vertex										// Vertex used for creating VBO
 float length(float3 p) {							// Get the length of a float3
 	return sqrtf(p.x*p.x + p.y*p.y + p.z*p.z);
 }
+
+inline int clamp(int x, int a, int b) {
+    return x < a ? a : (x > b ? b : x);
+}
+
+/// <summary>
+/// Cubic class that calculates the cubic spline from a set of control points/knots
+/// and performs cubic interpolation.
+/// 
+/// Based on the natural cubic spline code from: http://www.cse.unsw.edu.au/~lambert/splines/natcubic.html
+/// </summary>
+class Cubic
+{
+private:
+	Eigen::Vector4f a, b, c, d; // a + b*s + c*s^2 +d*s^3 
+
+public:
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+	Cubic() {}
+	Cubic(Eigen::Vector4f& a, Eigen::Vector4f& b, Eigen::Vector4f& c, Eigen::Vector4f& d)
+	{
+		this->a = a;
+		this->b = b;
+		this->c = c;
+		this->d = d;
+	}
+
+	//evaluate the point using a cubic equation
+	Eigen::Vector4f GetPointOnSpline(float s)
+	{
+		return (((d * s) + c) * s + b) * s + a;
+	}
+
+	static std::vector<Cubic*> CalculateCubicSpline(int n, std::vector<TransferControlPoint*> v)
+	{
+		Eigen::Vector4f* gamma = new Eigen::Vector4f[n + 1];
+		Eigen::Vector4f* delta = new Eigen::Vector4f[n + 1];
+		Eigen::Vector4f* D = new Eigen::Vector4f[n + 1];
+		int i;
+		/* We need to solve the equation
+		* taken from: http://mathworld.wolfram.com/CubicSpline.html
+		[2 1       ] [D[0]]   [3(v[1] - v[0])  ]
+		|1 4 1     | |D[1]|   |3(v[2] - v[0])  |
+		|  1 4 1   | | .  | = |      .         |
+		|    ..... | | .  |   |      .         |
+		|     1 4 1| | .  |   |3(v[n] - v[n-2])|
+		[       1 2] [D[n]]   [3(v[n] - v[n-1])]
+
+		by converting the matrix to upper triangular.
+		The D[i] are the derivatives at the control points.
+		*/
+
+		//this builds the coefficients of the left matrix
+		gamma[0] = Eigen::Vector4f::Zero();
+		gamma[0].x() = 1.0f / 2.0f;
+		gamma[0].y() = 1.0f / 2.0f;
+		gamma[0].z() = 1.0f / 2.0f;
+		gamma[0].w() = 1.0f / 2.0f;
+		for (i = 1; i < n; i++)
+		{
+			Eigen::Vector4f v = ((4.f * Eigen::Vector4f::Ones()) - gamma[i - 1]);
+			gamma[i].x() = 1.0f / v.x();
+			gamma[i].y() = 1.0f / v.y();
+			gamma[i].z() = 1.0f / v.z();
+			gamma[i].w() = 1.0f / v.w();
+		}
+
+		{
+			Eigen::Vector4f v = ((2.f * Eigen::Vector4f::Ones()) - gamma[n - 1]);
+			gamma[n].x() = 1.0f / v.x();
+			gamma[n].y() = 1.0f / v.y();
+			gamma[n].z() = 1.0f / v.z();
+			gamma[n].w() = 1.0f / v.w();
+		}
+
+		delta[0] = 3.f * (v[1]->Color - v[0]->Color);
+		
+		delta[0].x() *= gamma[0].x();
+		delta[0].y() *= gamma[0].y();
+		delta[0].z() *= gamma[0].z();
+		delta[0].w() *= gamma[0].w();
+
+		for (i = 1; i < n; i++)
+		{
+			delta[i] = (3.f * (v[i + 1]->Color - v[i - 1]->Color) - delta[i - 1]);
+
+			delta[i].x() *= gamma[i].x();
+			delta[i].y() *= gamma[i].y();
+			delta[i].z() *= gamma[i].z();
+			delta[i].w() *= gamma[i].w();
+		}
+
+		delta[n] = (3.f * (v[n]->Color - v[n - 1]->Color) - delta[n - 1]);
+		
+		delta[n].x() *= gamma[n].x();
+		delta[n].y() *= gamma[n].y();
+		delta[n].z() *= gamma[n].z();
+		delta[n].w() *= gamma[n].w();
+
+		D[n] = delta[n];
+		for (i = n - 1; i >= 0; i--)
+		{
+			D[i] = delta[i] - gamma[i];
+
+			D[i].x() *= D[i + 1].x();
+			D[i].y() *= D[i + 1].y();
+			D[i].z() *= D[i + 1].z();
+			D[i].w() *= D[i + 1].w();
+		}
+
+		// now compute the coefficients of the cubics 
+		std::vector<Cubic*> C(n);
+		for (i = 0; i < n; i++)
+		{
+			Eigen::Vector4f a = v[i]->Color;
+			Eigen::Vector4f b = D[i];
+			Eigen::Vector4f c = 3.f * (v[i + 1]->Color - v[i]->Color) - 2.f * D[i] - D[i + 1];
+			Eigen::Vector4f d = 2.f * (v[i]->Color - v[i + 1]->Color) + D[i] + D[i + 1];
+			C[i] = new Cubic(a, b, c, d);
+		}
+		return C;
+	}
+};
+
 
 // create a test volume texture, here you could load your own volume
 GLuint create_volumetexture()
@@ -217,8 +344,11 @@ void Volume::init() {
 
 	cgFrontTexData = cgGetNamedParameter(fProgram, "frontTexData");
 	cgBackTexData = cgGetNamedParameter(fProgram, "backTexData");
-	cgVolumeTexData = cgGetNamedParameter(fProgram, "volume_tex");
+	cgVolumeTexData = cgGetNamedParameter(fProgram, "VolumeS");
+	cgTransferTexData = cgGetNamedParameter(fProgram, "TransferS");
 	cgStepSize = cgGetNamedParameter(fProgram, "stepSize");
+
+	cgGLSetParameter1f(cgStepSize, 1.0f/100.0f);				// Set the incremental step size of the ray cast
 
 	createCube(1.0f, 1.0f, 1.0f);
 	printf("Cube created\n");
@@ -226,6 +356,15 @@ void Volume::init() {
 	volume_texture = createVolume();
 	printf("volume texture created\n");
 	//volume_texture = create_volumetexture();
+
+	GLuint transferTexture;
+	glGenTextures(1, &transferTexture);
+	glBindTexture(GL_TEXTURE_1D, transferTexture);
+	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, transfer);
 
 	initialized = true;
 }
@@ -318,7 +457,7 @@ int Volume::loadVolume(char *directory) {
 		signed short * bufferPointer = reader->GetOutput()->GetBufferPointer();
 
 		// Get number of pixels in image
-		int pixelCount = size[0] * size[1] *size[2];
+		pixelCount = size[0] * size[1] *size[2];
 
 		volumeWidth = size[0];
 		volumeHeight = size[1];
@@ -333,8 +472,9 @@ int Volume::loadVolume(char *directory) {
 
 
 		// Create array for iso values
-		data = new GLubyte[pixelCount];
-		memset(data, 255, pixelCount);
+		data = new GLubyte[pixelCount * 4];
+		mSamples = new float[pixelCount];
+		memset(data, 0, pixelCount * 4);
 
 		std::cout << "- Normalizing data" << std::endl; 
 
@@ -351,7 +491,7 @@ int Volume::loadVolume(char *directory) {
 			else if (normal > 1.f)
 				normal = 1.f;
 
-			data[i] = 255*normal;
+			mSamples[i] = normal;
 		}
 	}
 	catch (itk::ExceptionObject &ex)
@@ -359,6 +499,43 @@ int Volume::loadVolume(char *directory) {
 		std::cout << ex << std::endl;
 		return EXIT_FAILURE;
     }
+
+	std::cout << "- Computing Transfer Function" << std::endl; 
+	computeTransferFunction();
+	
+	std::cout << "- Computing Gradients" << std::endl; 
+	//generate normals from gradients
+	std::cout << "- Size: " << pixelCount << std::endl; 
+	mGradients = (float*)malloc(3 * pixelCount * sizeof(float));
+
+	if (mGradients) {
+		std::cout << "- Generate Gradients" << std::endl; 
+		generateGradients(0);
+
+		std::cout << "- Computing Filter" << std::endl; 
+		//filter the gradients with an NxNxN box filter
+		filterNxNxN(3);
+
+		for (int i = 0; i < pixelCount; i++)
+		{
+			data[4*i + 0] = mGradients[3*i + 0];
+			data[4*i + 1] = mGradients[3*i + 1];
+			data[4*i + 2] = mGradients[3*i + 2];
+			data[4*i + 3] = 255*mSamples[i];
+		}
+
+		free(mGradients);
+	} else {
+		for (int i = 0; i < pixelCount; i++)
+		{
+			data[4*i + 0] = 255;
+			data[4*i + 1] = 255;
+			data[4*i + 2] = 255;
+			data[4*i + 3] = 255*mSamples[i];
+		}
+	}
+
+	delete mSamples;
 	
 	return EXIT_SUCCESS;
 
@@ -375,13 +552,230 @@ GLuint Volume::createVolume() {
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
-	glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, 
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, 
 		volumeWidth, volumeHeight, volumeDepth, 
-		0, GL_RED, GL_UNSIGNED_BYTE, data);
+		0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 
 	delete []data;
 
 	return volume_texture;
+}
+
+void Volume::computeTransferFunction() {
+	// Test spline
+	colorKnots.push_back( new TransferControlPoint(.91f, .7f, .61f, 0) );
+	colorKnots.push_back( new TransferControlPoint(.91f, .7f, .61f, 80) );
+	colorKnots.push_back( new TransferControlPoint(1.0f, 1.0f, .85f, 82) );
+	colorKnots.push_back( new TransferControlPoint(1.0f, 1.0f, .85f, 256) );
+
+	alphaKnots.push_back( new TransferControlPoint(0.0f, 0) );
+	alphaKnots.push_back( new TransferControlPoint(0.0f, 40) );
+	alphaKnots.push_back( new TransferControlPoint(0.2f, 60) );
+	alphaKnots.push_back( new TransferControlPoint(0.05f, 63) );
+	alphaKnots.push_back( new TransferControlPoint(0.0f, 80) );
+	alphaKnots.push_back( new TransferControlPoint(0.9f, 82) );
+	alphaKnots.push_back( new TransferControlPoint(1.f, 256) );
+
+	//initialize the cubic spline for the transfer function
+	Eigen::Vector4f* transferFunc = new Eigen::Vector4f[256];
+
+	//temporary transfer function copy the color/alpha from the transfer control points
+	std::vector<TransferControlPoint*> tempColorKnots = std::vector<TransferControlPoint*>(colorKnots);
+	std::vector<TransferControlPoint*> tempAlphaKnots = std::vector<TransferControlPoint*>(alphaKnots);
+
+	std::vector<Cubic*> colorCubic = Cubic::CalculateCubicSpline(colorKnots.size() - 1, tempColorKnots);
+	std::vector<Cubic*> alphaCubic = Cubic::CalculateCubicSpline(alphaKnots.size() - 1, tempAlphaKnots);
+
+	int numTF = 0;
+	for (int i = 0; i < colorKnots.size() - 1; i++)
+	{
+		int steps = colorKnots[i + 1]->IsoValue - colorKnots[i]->IsoValue;
+
+		for (int j = 0; j < steps; j++)
+		{
+			float k = (float)j / (float)(steps - 1);
+
+			transferFunc[numTF++] = colorCubic[i]->GetPointOnSpline(k);
+		}
+	}
+
+	numTF = 0;
+	for (int i = 0; i < alphaKnots.size() - 1; i++)
+	{
+		int steps = alphaKnots[i + 1]->IsoValue - alphaKnots[i]->IsoValue;
+
+		for (int j = 0; j < steps; j++)
+		{
+			float k = (float)j / (float)(steps - 1);
+
+			transferFunc[numTF++].w() = alphaCubic[i]->GetPointOnSpline(k).w();
+		}
+	}
+
+	transfer = new GLubyte[4 * 256];
+	for (int i = 0; i < 256; i++)
+	{
+		Eigen::Vector4f color = transferFunc[i];
+		//store rgba
+		transfer[4*i + 0] = 255*color.x();
+		transfer[4*i + 1] = 255*color.y();
+		transfer[4*i + 2] = 255*color.z();
+		transfer[4*i + 3] = 255*color.w();
+	}
+}
+
+/// <summary>
+/// Generates gradients using a central differences scheme.
+/// </summary>
+/// <param name="sampleSize">The size/radius of the sample to take.</param>
+void Volume::generateGradients(int sampleSize)
+{
+	int n = sampleSize;
+
+	int index = 0;
+	for (int z = 0; z < volumeDepth; z++)
+	{
+		for (int y = 0; y < volumeHeight; y++)
+		{
+			for (int x = 0; x < volumeWidth; x++)
+			{
+				float xDiff = sampleVolume(x + n, y, z) - sampleVolume(x - n, y, z);
+				float yDiff = sampleVolume(x, y + n, z) - sampleVolume(x, y - n, z);
+				float zDiff = sampleVolume(x, y, z + n) - sampleVolume(x, y, z - n);
+
+				float size_squared = xDiff*xDiff + yDiff*yDiff + zDiff*zDiff;
+				
+				if (size_squared == 0.f) {
+					mGradients[3*index + 0] = 0.f;
+					mGradients[3*index + 1] = 0.f;
+					mGradients[3*index + 2] = 0.f;
+				} else {
+					float size = sqrtf(size_squared);
+					xDiff /= size;
+					yDiff /= size;
+					zDiff /= size;
+					mGradients[3*index + 0] = xDiff;
+					mGradients[3*index + 1] = yDiff;
+					mGradients[3*index + 2] = zDiff;
+				}
+				
+				index++;
+			}
+		}
+	}
+}
+
+/// <summary>
+/// Applies an NxNxN filter to the gradients. 
+/// Should be an odd number of samples. 3 used by default.
+/// </summary>
+/// <param name="n"></param>
+void Volume::filterNxNxN(int n)
+{
+	int index = 0;
+	for (int z = 0; z < volumeDepth; z++)
+	{
+		for (int y = 0; y < volumeHeight; y++)
+		{
+			for (int x = 0; x < volumeWidth; x++)
+			{
+				Eigen::Vector3f sample = sampleNxNxN(x, y, z, n);
+				
+				mGradients[3*index + 0] = sample.x();
+				mGradients[3*index + 1] = sample.y();
+				mGradients[3*index + 2] = sample.z();
+
+				index++;
+			}
+		}
+	}
+}
+
+/// <summary>
+/// Samples the sub-volume graident volume and returns the average.
+/// Should be an odd number of samples.
+/// </summary>
+/// <param name="x"></param>
+/// <param name="y"></param>
+/// <param name="z"></param>
+/// <param name="n"></param>
+/// <returns></returns>
+Eigen::Vector3f Volume::sampleNxNxN(int x, int y, int z, int n)
+{
+	n = (n - 1) / 2;
+
+	Eigen::Vector3f average = Eigen::Vector3f::Zero();
+	int num = 0;
+
+	for (int k = z - n; k <= z + n; k++)
+	{
+		for (int j = y - n; j <= y + n; j++)
+		{
+			for (int i = x - n; i <= x + n; i++)
+			{
+				if (isInBounds(i, j, k))
+				{
+					average += sampleGradients(i, j, k);
+					num++;
+				}
+			}
+		}
+	}
+
+	average /= (float)num;
+	if (average.x() != 0.0f && average.y() != 0.0f && average.z() != 0.0f)
+		average.normalize();
+
+	return average;
+}
+
+/// <summary>
+/// Samples the scalar volume
+/// </summary>
+/// <param name="x"></param>
+/// <param name="y"></param>
+/// <param name="z"></param>
+/// <returns></returns>
+float Volume::sampleVolume(int x, int y, int z)
+{
+	//x = clamp(x, 0, volumeWidth - 1);
+	//y = clamp(y, 0, volumeHeight - 1);
+	//z = clamp(z, 0, volumeDepth - 1);
+
+	int index = x + (y * volumeWidth) + (z * volumeWidth * volumeHeight);
+	return 0.f;//(float)mSamples[index];
+}
+
+/// <summary>
+/// Samples the gradient volume
+/// </summary>
+/// <param name="x"></param>
+/// <param name="y"></param>
+/// <param name="z"></param>
+/// <returns></returns>
+Eigen::Vector3f Volume::sampleGradients(int x, int y, int z)
+{
+	int index = x + (y * volumeWidth) + (z * volumeWidth * volumeHeight);
+	Eigen::Vector3f sample = Eigen::Vector3f(
+		mGradients[3*index + 0],
+		mGradients[3*index + 1],
+		mGradients[3*index + 2]);
+
+	return sample;
+}
+
+/// <summary>
+/// Checks whether the input is in the bounds of the volume data array
+/// </summary>
+/// <param name="x"></param>
+/// <param name="y"></param>
+/// <param name="z"></param>
+/// <returns></returns>
+bool Volume::isInBounds(int x, int y, int z)
+{
+	return ((x >= 0 && x < volumeWidth) &&
+		(y >= 0 && y < volumeHeight) &&
+		(z >= 0 && z < volumeDepth));
 }
 
 void Volume::createCube(float x, float y, float z) {
@@ -626,15 +1020,15 @@ void Volume::render(Camera* camera) {
 	cgGLBindProgram(fProgram);
 	CheckCgError();
 
-	cgGLSetParameter1f(cgStepSize, 1.0f/100.0f);				// Set the incremental step size of the ray cast
-
 	// enable Cg shader and texture (a 'compute' fragment program)
 	cgGLSetTextureParameter(cgFrontTexData, front_facing);		// Bind front facing render to cgFrontTexData
 	cgGLSetTextureParameter(cgBackTexData, back_facing);		// Bind back facing render to cgBackTexData
 	cgGLSetTextureParameter(cgVolumeTexData, volume_texture);	// Bind the voulume_texture to cgVolumeTexData
+	cgGLSetTextureParameter(cgTransferTexData, transferTexture);// Bind the transferTexture to cgTransferTexData
 	cgGLEnableTextureParameter(cgFrontTexData);					// Enable cgFrontTexData
 	cgGLEnableTextureParameter(cgBackTexData);					// Enable cgBackTexData
 	cgGLEnableTextureParameter(cgVolumeTexData);				// Enable cgVolumeTexData
+	cgGLEnableTextureParameter(cgTransferTexData);				// Enable cgTransferTexData
 	
 	glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
 	
