@@ -12,6 +12,7 @@
 #include "itkGDCMSeriesFileNames.h"
 
 #include "TransferControlPoint.h"
+#include "Cubic.h"
 
 // All textures for the buffer are TEXTURE_SIZExTEXTURE_SIZE in dimensions
 #define TEXTURE_SIZE 1024
@@ -21,7 +22,10 @@
 #define VOLUME_TEX_SIZE 128
 
 struct float3 {										// A three dimensional float
-	float x, y, z;									// Variables for each dimension
+													// Variables for each dimension
+	float x;										// x dimension
+	float y;										// y dimension
+	float z;										// z dimension								
 	
 	float3() {										// Generic constructor
 		x = 0.f;
@@ -72,133 +76,16 @@ inline int clamp(int x, int a, int b) {
     return x;
 }
 
-/// <summary>
-/// Cubic class that calculates the cubic spline from a set of control points/knots
-/// and performs cubic interpolation.
-/// 
-/// Based on the natural cubic spline code from: http://www.cse.unsw.edu.au/~lambert/splines/natcubic.html
-/// </summary>
-class CubicSingle
-{
-private:
-	float a, b, c, d; // a + b*s + c*s^2 +d*s^3 
+inline void loadingBar(int x, int n, int w) {
+	// Calculuate the ratio of complete-to-incomplete.
+	float ratio = x/(float)n;
+	int c = ratio * w;
 
-public:
-	CubicSingle() {}
-	CubicSingle(float a, float b, float c, float d)
-	{
-		this->a = a;
-		this->b = b;
-		this->c = c;
-		this->d = d;
-	}
-
-	float A() { return a; }
-	float B() { return b; }
-	float C() { return c; }
-	float D() { return d; }
-
-	//evaluate the point using a cubic equation
-	float GetPointOnSpline(float s)
-	{
-		return (((d * s) + c) * s + b) * s + a;
-	}
-
-	static CubicSingle* calcNaturalCubic(int n, float* x, float* gamma) {
-        float* delta = new float[n + 1];
-        delta[0] = 3 * (x[1] - x[0]) * gamma[0];
-        for (int i = 1; i < n; ++i)
-            delta[i] = (3 * (x[i + 1] - x[i - 1]) - delta[i - 1]) * gamma[i];
-        delta[n] = (3 * (x[n] - x[n - 1])-delta[n - 1]) * gamma[n];
-
-        float* D = new float[n + 1];
-        D[n] = delta[n];
-        for (int i = n - 1; i >= 0; --i) {
-            D[i] = delta[i] - gamma[i] * D[i + 1];
-        }
-
-        // Calculate the cubic segments.
-        CubicSingle* C = new CubicSingle[n];
-        for (int i = 0; i < n; i++) {
-            float a = x[i];
-            float b = D[i];
-            float c = 3 * (x[i + 1] - x[i]) - 2 * D[i] - D[i + 1];
-            float d = 2 * (x[i] - x[i + 1]) + D[i] + D[i + 1];
-            C[i] = CubicSingle(a, b, c, d);
-        }
-
-        return C;
-    }
-};
-
-class Cubic
-{
-private:
-	Eigen::Vector4f a, b, c, d; // a + b*s + c*s^2 +d*s^3 
-
-public:
-	Cubic() {}
-	Cubic(Eigen::Vector4f& a, Eigen::Vector4f& b, Eigen::Vector4f& c, Eigen::Vector4f& d)
-	{
-		this->a = a;
-		this->b = b;
-		this->c = c;
-		this->d = d;
-	}
-
-	//evaluate the point using a cubic equation
-	Eigen::Vector4f GetPointOnSpline(float s)
-	{
-		return (((d * s) + c) * s + b) * s + a;
-	}
-
-	static std::vector<Cubic*> CalculateCubicSpline(int n, std::vector<TransferControlPoint*> v)
-	{
-		float* gamma = new float[n + 1];
-		gamma[0] = 1.0 / 2.0;
-		for (int i = 1; i < n; ++i)
-			gamma[i] = 1 / (4 - gamma[i - 1]);
-		gamma[n] = 1 / (2 - gamma[n - 1]);
-
-		float* red = new float[n + 1];
-		float* green = new float[n + 1];
-		float* blue = new float[n + 1];
-		float* alpha = new float[n + 1];
-
-		for (int i = 0; i < n + 1; i++)
-		{
-			red[i] = v[i]->Color.x();
-			green[i] = v[i]->Color.y();
-			blue[i] = v[i]->Color.z();
-			alpha[i] = v[i]->Color.w();
-		}
-
-		// now compute the coefficients of the cubics 
-		std::vector<Cubic*> C(n);
-		for (int i = 0; i < n; i++)
-		{
-			CubicSingle* cr = CubicSingle::calcNaturalCubic(n, red, gamma);
-			CubicSingle* cg = CubicSingle::calcNaturalCubic(n, green, gamma);
-			CubicSingle* cb = CubicSingle::calcNaturalCubic(n, blue, gamma);
-			CubicSingle* ca = CubicSingle::calcNaturalCubic(n, alpha, gamma);
-
-			Eigen::Vector4f a = Eigen::Vector4f(cr->A(), cg->A(), cb->A(), ca->A());
-			Eigen::Vector4f b = Eigen::Vector4f(cr->B(), cg->B(), cb->B(), ca->B());
-			Eigen::Vector4f c = Eigen::Vector4f(cr->C(), cg->C(), cb->C(), ca->C());
-			Eigen::Vector4f d = Eigen::Vector4f(cr->D(), cg->D(), cb->D(), ca->D());
-
-			C[i] = new Cubic(a, b, c, d);
-
-			delete cr;
-			delete cg;
-			delete cb;
-			delete ca;
-		}
-
-		return C;
-	}
-};
-
+	std::cout << std::setw(3) << (int)(ratio*100) << "% [";
+	for (int x=0; x<c; x++) std::cout << "=";
+	for (int x=c; x<w; x++) std::cout << " ";
+	std::cout << "]\r" << std::flush;
+}
 
 // create a test volume texture, here you could load your own volume
 GLuint create_volumetexture()
@@ -369,6 +256,7 @@ void Volume::init() {
 	printf("volume texture created\n");
 	//volume_texture = create_volumetexture();
 	
+	/*
 	for (int i = 0; i < 256; i++) {
 		printf("%3d	\t%3d %3d %3d %3d\n", 
 			i, 
@@ -377,7 +265,7 @@ void Volume::init() {
 			transfer[4*i + 2],
 			transfer[4*i + 3]);
 	}
-
+	*/
 	glGenTextures(1, &transferTexture);
 	glBindTexture(GL_TEXTURE_1D, transferTexture);
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
@@ -398,6 +286,35 @@ bool Volume::needsInit() {
 }
 
 int Volume::loadVolume(char *directory) {
+	std::cout << "- Computing Transfer Function" << std::endl; 
+	computeTransferFunction();
+
+	// reopen file, and read the data
+	FILE* dataFile = fopen("file.bin", "r");
+
+	if (dataFile) {
+		std::cout << "- Saved File Found" << std::endl; 
+		fread(&volumeWidth, sizeof(int), 1, dataFile); 
+		fread(&volumeHeight, sizeof(int), 1, dataFile);
+		fread(&volumeDepth, sizeof(int), 1, dataFile); 
+
+		std::cout << "- Volume Size: " 
+			<< "[" 
+			<< volumeWidth << ", "
+			<< volumeHeight << ", "
+			<< volumeDepth
+			<< "]" << std::endl;
+
+		pixelCount = volumeWidth * volumeHeight * volumeDepth;
+		int dataSize = pixelCount * 4;
+		data = (GLubyte*)malloc(sizeof(GLubyte) * dataSize);
+		fread(data, sizeof(GLubyte), dataSize, dataFile);
+
+		fclose(dataFile);
+
+		return EXIT_SUCCESS;
+	}
+
 	typedef signed short    PixelType;
 	const unsigned int      Dimension = 3;
 
@@ -506,7 +423,7 @@ int Volume::loadVolume(char *directory) {
 		float max = 700.f;
 
 		// Normalize values
-		for (int i = 0; i < pixelCount; i = i++)
+		for (unsigned int i = 0; i < pixelCount; i++)
 		{
 			float normal = ((float)bufferPointer[i] - min)/(max - min);
 
@@ -524,40 +441,47 @@ int Volume::loadVolume(char *directory) {
 		return EXIT_FAILURE;
     }
 
-	std::cout << "- Computing Transfer Function" << std::endl; 
-	computeTransferFunction();
-	
 	std::cout << "- Computing Gradients" << std::endl; 
 	//generate normals from gradients
 	std::cout << "- Size: " << pixelCount << std::endl; 
-	mGradients = (float*)malloc(3 * pixelCount * sizeof(float));
 
-	if (mGradients) {
-		std::cout << "- Generate Gradients" << std::endl; 
-		generateGradients(0);
-
-		std::cout << "- Computing Filter" << std::endl; 
-		//filter the gradients with an NxNxN box filter
-		filterNxNxN(3);
-
-		for (int i = 0; i < pixelCount; i++)
-		{
-			data[4*i + 0] = mGradients[3*i + 0];
-			data[4*i + 1] = mGradients[3*i + 1];
-			data[4*i + 2] = mGradients[3*i + 2];
-			data[4*i + 3] = 255*mSamples[i];
-		}
-
-		free(mGradients);
-	} else {
-		for (int i = 0; i < pixelCount; i++)
-		{
-			data[4*i + 0] = 255;
-			data[4*i + 1] = 255;
-			data[4*i + 2] = 255;
-			data[4*i + 3] = 255*mSamples[i];
-		}
+	std::cout << "- Initializing Gradients" << std::endl;
+	for (unsigned int i = 0; i < pixelCount; i++)
+	{
+		data[4*i + 0] = 0;
+		data[4*i + 1] = 0;
+		data[4*i + 2] = 0;
 	}
+
+	std::cout << "- Generate Gradients" << std::endl;
+	generateGradients(1);
+
+	std::cout << "- Computing Filter" << std::endl; 
+	//filter the gradients with an NxNxN box filter
+	filterNxNxN(3);
+
+	for (int i = 0; i < pixelCount; i++)
+	{
+		data[4*i + 3] = 255*mSamples[i];
+	}
+
+	FILE* fp = fopen("data.bin", "w");
+	// write it to a file
+	fwrite(&volumeWidth, sizeof(int), 1, fp);
+	fwrite(&volumeHeight, sizeof(int), 1, fp);
+	fwrite(&volumeDepth, sizeof(int), 1, fp);
+	fwrite(data, sizeof(GLubyte), 4*pixelCount, fp);
+	fclose(fp);
+	
+	/*
+	for (unsigned int i = 0; i < pixelCount; i++)
+	{
+		data[4*i + 0] = 255;
+		data[4*i + 1] = 255;
+		data[4*i + 2] = 255;
+		data[4*i + 3] = 255*mSamples[i];
+	}
+	*/
 
 	delete mSamples;
 	
@@ -606,9 +530,10 @@ void Volume::computeTransferFunction() {
 	alphaKnots.push_back( new TransferControlPoint(0.0f, 0) );
 	alphaKnots.push_back( new TransferControlPoint(0.0f, 40) );
 	alphaKnots.push_back( new TransferControlPoint(0.2f, 60) );
-	alphaKnots.push_back( new TransferControlPoint(0.05f, 63) );
+	alphaKnots.push_back( new TransferControlPoint(0.05f, 73) );
 	alphaKnots.push_back( new TransferControlPoint(0.0f, 80) );
-	alphaKnots.push_back( new TransferControlPoint(0.9f, 82) );
+	alphaKnots.push_back( new TransferControlPoint(0.0f, 150) );
+	alphaKnots.push_back( new TransferControlPoint(0.9f, 175) );
 	alphaKnots.push_back( new TransferControlPoint(1.f, 256) );
 
 	//initialize the cubic spline for the transfer function
@@ -618,8 +543,31 @@ void Volume::computeTransferFunction() {
 	std::vector<TransferControlPoint*> tempColorKnots = std::vector<TransferControlPoint*>(colorKnots);
 	std::vector<TransferControlPoint*> tempAlphaKnots = std::vector<TransferControlPoint*>(alphaKnots);
 
-	std::vector<Cubic*> colorCubic = Cubic::CalculateCubicSpline(colorKnots.size() - 1, tempColorKnots);
-	std::vector<Cubic*> alphaCubic = Cubic::CalculateCubicSpline(alphaKnots.size() - 1, tempAlphaKnots);
+	int colorN = colorKnots.size() - 1;
+	int alphaN = tempAlphaKnots.size() - 1;
+
+	float* red = new float[colorN + 1];
+	float* green = new float[colorN + 1];
+	float* blue = new float[colorN + 1];
+	float* alpha = new float[alphaN + 1];
+
+	for (int i = 0; i < colorN + 1; i++)
+	{
+		red[i] = tempColorKnots[i]->Color.x();
+		green[i] = tempColorKnots[i]->Color.y();
+		blue[i] = tempColorKnots[i]->Color.z();
+	}
+
+	for (int i = 0; i < alphaN + 1; i++)
+	{
+		alpha[i] = tempAlphaKnots[i]->Color.w();
+	}
+
+
+	Cubic* redCubic = Cubic::calcNaturalCubic(colorN, red);
+	Cubic* greenCubic = Cubic::calcNaturalCubic(colorN, green);
+	Cubic* blueCubic = Cubic::calcNaturalCubic(colorN, blue);
+	Cubic* alphaCubic = Cubic::calcNaturalCubic(alphaN, alpha);
 
 	int numTF = 0;
 	for (int i = 0; i < colorKnots.size() - 1; i++)
@@ -630,7 +578,10 @@ void Volume::computeTransferFunction() {
 		{
 			float k = (float)j / (float)(steps - 1);
 
-			transferFunc[numTF++] = colorCubic[i]->GetPointOnSpline(k);
+			transferFunc[numTF].x() = redCubic[i].GetPointOnSpline(k);
+			transferFunc[numTF].y() = greenCubic[i].GetPointOnSpline(k);
+			transferFunc[numTF].z() = blueCubic[i].GetPointOnSpline(k);
+			numTF++;
 		}
 	}
 
@@ -643,7 +594,7 @@ void Volume::computeTransferFunction() {
 		{
 			float k = (float)j / (float)(steps - 1);
 
-			transferFunc[numTF++].w() = alphaCubic[i]->GetPointOnSpline(k).w();
+			transferFunc[numTF++].w() = alphaCubic[i].GetPointOnSpline(k);
 		}
 	}
 
@@ -651,22 +602,20 @@ void Volume::computeTransferFunction() {
 	for (int i = 0; i < 256; i++)
 	{
 		//Eigen::Vector4f color = 255.f*transferFunc[i];
-
-		printf("%5f %5f %5f %5f\n",
-			transferFunc[i].x(),
-			transferFunc[i].y(),
-			transferFunc[i].z(),
-			transferFunc[i].w());
+		/*
+		printf("%3d %3d %3d %3d\n",
+			clamp((int)(255.f*transferFunc[i].x()), 0, 255),
+			clamp((int)(255.f*transferFunc[i].y()), 0, 255),
+			clamp((int)(255.f*transferFunc[i].z()), 0, 255),
+			clamp((int)(255.f*transferFunc[i].w()), 0, 255));
 		//printf("%d\n", (int)(255.f*transferFunc[i].w()));
-
+		*/
 		//store rgba
 		transfer[4*i + 0] = (GLubyte)clamp((int)(255.f*transferFunc[i].x()), 0, 255);
 		transfer[4*i + 1] = (GLubyte)clamp((int)(255.f*transferFunc[i].y()), 0, 255);
 		transfer[4*i + 2] = (GLubyte)clamp((int)(255.f*transferFunc[i].z()), 0, 255);
 		transfer[4*i + 3] = (GLubyte)clamp((int)(255.f*transferFunc[i].w()), 0, 255);
 	}
-
-	Sleep(30000);
 }
 
 /// <summary>
@@ -680,6 +629,7 @@ void Volume::generateGradients(int sampleSize)
 	int index = 0;
 	for (int z = 0; z < volumeDepth; z++)
 	{
+		loadingBar(z, volumeDepth, 30);
 		for (int y = 0; y < volumeHeight; y++)
 		{
 			for (int x = 0; x < volumeWidth; x++)
@@ -689,19 +639,19 @@ void Volume::generateGradients(int sampleSize)
 				float zDiff = sampleVolume(x, y, z + n) - sampleVolume(x, y, z - n);
 
 				float size_squared = xDiff*xDiff + yDiff*yDiff + zDiff*zDiff;
-				
+
 				if (size_squared == 0.f) {
-					mGradients[3*index + 0] = 0.f;
-					mGradients[3*index + 1] = 0.f;
-					mGradients[3*index + 2] = 0.f;
+					data[4*index + 0] = 0;
+					data[4*index + 1] = 0;
+					data[4*index + 2] = 0;
 				} else {
 					float size = sqrtf(size_squared);
 					xDiff /= size;
 					yDiff /= size;
 					zDiff /= size;
-					mGradients[3*index + 0] = xDiff;
-					mGradients[3*index + 1] = yDiff;
-					mGradients[3*index + 2] = zDiff;
+					data[4*index + 0] = clamp((int)(255.f*xDiff), 0, 255);
+					data[4*index + 1] = clamp((int)(255.f*yDiff), 0, 255);
+					data[4*index + 2] = clamp((int)(255.f*zDiff), 0, 255);
 				}
 				
 				index++;
@@ -720,15 +670,16 @@ void Volume::filterNxNxN(int n)
 	int index = 0;
 	for (int z = 0; z < volumeDepth; z++)
 	{
+		loadingBar(z, volumeDepth, 30);
 		for (int y = 0; y < volumeHeight; y++)
 		{
 			for (int x = 0; x < volumeWidth; x++)
 			{
 				Eigen::Vector3f sample = sampleNxNxN(x, y, z, n);
 				
-				mGradients[3*index + 0] = sample.x();
-				mGradients[3*index + 1] = sample.y();
-				mGradients[3*index + 2] = sample.z();
+				data[4*index + 0] = clamp((int)(255.f*sample.x()), 0, 255);
+				data[4*index + 1] = clamp((int)(255.f*sample.y()), 0, 255);
+				data[4*index + 2] = clamp((int)(255.f*sample.z()), 0, 255);
 
 				index++;
 			}
@@ -783,12 +734,12 @@ Eigen::Vector3f Volume::sampleNxNxN(int x, int y, int z, int n)
 /// <returns></returns>
 float Volume::sampleVolume(int x, int y, int z)
 {
-	//x = clamp(x, 0, volumeWidth - 1);
-	//y = clamp(y, 0, volumeHeight - 1);
-	//z = clamp(z, 0, volumeDepth - 1);
+	x = clamp(x, 0, volumeWidth - 1);
+	y = clamp(y, 0, volumeHeight - 1);
+	z = clamp(z, 0, volumeDepth - 1);
 
 	int index = x + (y * volumeWidth) + (z * volumeWidth * volumeHeight);
-	return 0.f;//(float)mSamples[index];
+	return (float)mSamples[index];
 }
 
 /// <summary>
@@ -801,10 +752,11 @@ float Volume::sampleVolume(int x, int y, int z)
 Eigen::Vector3f Volume::sampleGradients(int x, int y, int z)
 {
 	int index = x + (y * volumeWidth) + (z * volumeWidth * volumeHeight);
+
 	Eigen::Vector3f sample = Eigen::Vector3f(
-		mGradients[3*index + 0],
-		mGradients[3*index + 1],
-		mGradients[3*index + 2]);
+		data[4*index + 0] / 255.f,
+		data[4*index + 1] / 255.f,
+		data[4*index + 2] / 255.f);
 
 	return sample;
 }

@@ -73,7 +73,6 @@ private:
 	int volumeWidth, volumeHeight, volumeDepth;
 
 	GLubyte* transfer;
-	float *mGradients;
 	float *mSamples;
 
 	std::vector<TransferControlPoint*> colorKnots;
