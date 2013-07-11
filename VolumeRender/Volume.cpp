@@ -73,14 +73,65 @@ inline int clamp(int x, int a, int b) {
 /// 
 /// Based on the natural cubic spline code from: http://www.cse.unsw.edu.au/~lambert/splines/natcubic.html
 /// </summary>
+class CubicSingle
+{
+private:
+	double a, b, c, d; // a + b*s + c*s^2 +d*s^3 
+
+public:
+	CubicSingle() {}
+	CubicSingle(double a, double b, double c, double d)
+	{
+		this->a = a;
+		this->b = b;
+		this->c = c;
+		this->d = d;
+	}
+
+	double A() { return a; }
+	double B() { return b; }
+	double C() { return c; }
+	double D() { return d; }
+
+	//evaluate the point using a cubic equation
+	double GetPointOnSpline(float s)
+	{
+		return (((d * s) + c) * s + b) * s + a;
+	}
+
+	static CubicSingle* calcNaturalCubic(int n, double* x, double* gamma) {
+        double* delta = new double[n + 1];
+        delta[0] = 3 * (x[1] - x[0]) * gamma[0];
+        for (int i = 1; i < n; ++i)
+            delta[i] = (3 * (x[i + 1] - x[i - 1]) - delta[i - 1]) * gamma[i];
+        delta[n] = (3 * (x[n] - x[n - 1])-delta[n - 1]) * gamma[n];
+
+        double* D = new double[n + 1];
+        D[n] = delta[n];
+        for (int i = n - 1; i >= 0; --i) {
+            D[i] = delta[i] - gamma[i] * D[i + 1];
+        }
+
+        // Calculate the cubic segments.
+        CubicSingle* C = new CubicSingle[n];
+        for (int i = 0; i < n; i++) {
+            double a = x[i];
+            double b = D[i];
+            double c = 3 * (x[i + 1] - x[i]) - 2 * D[i] - D[i + 1];
+            double d = 2 * (x[i] - x[i + 1]) + D[i] + D[i + 1];
+            C[i] = CubicSingle(a, b, c, d);
+        }
+
+        return C;
+    }
+};
+
 class Cubic
 {
 private:
 	Eigen::Vector4f a, b, c, d; // a + b*s + c*s^2 +d*s^3 
 
 public:
-	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-
 	Cubic() {}
 	Cubic(Eigen::Vector4f& a, Eigen::Vector4f& b, Eigen::Vector4f& c, Eigen::Vector4f& d)
 	{
@@ -98,91 +149,46 @@ public:
 
 	static std::vector<Cubic*> CalculateCubicSpline(int n, std::vector<TransferControlPoint*> v)
 	{
-		Eigen::Vector4f* gamma = new Eigen::Vector4f[n + 1];
-		Eigen::Vector4f* delta = new Eigen::Vector4f[n + 1];
-		Eigen::Vector4f* D = new Eigen::Vector4f[n + 1];
-		int i;
-		/* We need to solve the equation
-		* taken from: http://mathworld.wolfram.com/CubicSpline.html
-		[2 1       ] [D[0]]   [3(v[1] - v[0])  ]
-		|1 4 1     | |D[1]|   |3(v[2] - v[0])  |
-		|  1 4 1   | | .  | = |      .         |
-		|    ..... | | .  |   |      .         |
-		|     1 4 1| | .  |   |3(v[n] - v[n-2])|
-		[       1 2] [D[n]]   [3(v[n] - v[n-1])]
+		double* gamma = new double[n + 1];
+		gamma[0] = 1.0 / 2.0;
+		for (int i = 1; i < n; ++i)
+			gamma[i] = 1 / (4 - gamma[i - 1]);
+		gamma[n] = 1 / (2 - gamma[n - 1]);
 
-		by converting the matrix to upper triangular.
-		The D[i] are the derivatives at the control points.
-		*/
+		double* red = new double[n + 1];
+		double* green = new double[n + 1];
+		double* blue = new double[n + 1];
+		double* alpha = new double[n + 1];
 
-		//this builds the coefficients of the left matrix
-		gamma[0] = Eigen::Vector4f::Zero();
-		gamma[0].x() = 1.0f / 2.0f;
-		gamma[0].y() = 1.0f / 2.0f;
-		gamma[0].z() = 1.0f / 2.0f;
-		gamma[0].w() = 1.0f / 2.0f;
-		for (i = 1; i < n; i++)
+		for (int i = 0; i < n + 1; i++)
 		{
-			Eigen::Vector4f v = ((4.f * Eigen::Vector4f::Ones()) - gamma[i - 1]);
-			gamma[i].x() = 1.0f / v.x();
-			gamma[i].y() = 1.0f / v.y();
-			gamma[i].z() = 1.0f / v.z();
-			gamma[i].w() = 1.0f / v.w();
+			red[i] = v[i]->Color.x();
+			green[i] = v[i]->Color.y();
+			blue[i] = v[i]->Color.z();
+			alpha[i] = v[i]->Color.w();
 		}
-
-		{
-			Eigen::Vector4f v = ((2.f * Eigen::Vector4f::Ones()) - gamma[n - 1]);
-			gamma[n].x() = 1.0f / v.x();
-			gamma[n].y() = 1.0f / v.y();
-			gamma[n].z() = 1.0f / v.z();
-			gamma[n].w() = 1.0f / v.w();
-		}
-
-		delta[0] = 3.f * (v[1]->Color - v[0]->Color);
-		
-		delta[0].x() *= gamma[0].x();
-		delta[0].y() *= gamma[0].y();
-		delta[0].z() *= gamma[0].z();
-		delta[0].w() *= gamma[0].w();
-
-		for (i = 1; i < n; i++)
-		{
-			delta[i] = (3.f * (v[i + 1]->Color - v[i - 1]->Color) - delta[i - 1]);
-
-			delta[i].x() *= gamma[i].x();
-			delta[i].y() *= gamma[i].y();
-			delta[i].z() *= gamma[i].z();
-			delta[i].w() *= gamma[i].w();
-		}
-
-		delta[n] = (3.f * (v[n]->Color - v[n - 1]->Color) - delta[n - 1]);
-		
-		delta[n].x() *= gamma[n].x();
-		delta[n].y() *= gamma[n].y();
-		delta[n].z() *= gamma[n].z();
-		delta[n].w() *= gamma[n].w();
-
-		D[n] = delta[n];
-		for (i = n - 1; i >= 0; i--)
-		{
-			D[i] = delta[i] - gamma[i];
-
-			D[i].x() *= D[i + 1].x();
-			D[i].y() *= D[i + 1].y();
-			D[i].z() *= D[i + 1].z();
-			D[i].w() *= D[i + 1].w();
-		}
-
 		// now compute the coefficients of the cubics 
 		std::vector<Cubic*> C(n);
-		for (i = 0; i < n; i++)
+		for (int i = 0; i < n; i++)
 		{
-			Eigen::Vector4f a = v[i]->Color;
-			Eigen::Vector4f b = D[i];
-			Eigen::Vector4f c = 3.f * (v[i + 1]->Color - v[i]->Color) - 2.f * D[i] - D[i + 1];
-			Eigen::Vector4f d = 2.f * (v[i]->Color - v[i + 1]->Color) + D[i] + D[i + 1];
+			CubicSingle* cr = CubicSingle::calcNaturalCubic(n, red, gamma);
+			CubicSingle* cg = CubicSingle::calcNaturalCubic(n, green, gamma);
+			CubicSingle* cb = CubicSingle::calcNaturalCubic(n, blue, gamma);
+			CubicSingle* ca = CubicSingle::calcNaturalCubic(n, alpha, gamma);
+
+			Eigen::Vector4f a = Eigen::Vector4f(cr->A(), cg->A(), cb->A(), ca->A());
+			Eigen::Vector4f b = Eigen::Vector4f(cr->B(), cg->B(), cb->B(), ca->B());
+			Eigen::Vector4f c = Eigen::Vector4f(cr->C(), cg->C(), cb->C(), ca->C());
+			Eigen::Vector4f d = Eigen::Vector4f(cr->D(), cg->D(), cb->D(), ca->D());
+
 			C[i] = new Cubic(a, b, c, d);
+
+			delete cr;
+			delete cg;
+			delete cb;
+			delete ca;
 		}
+
 		return C;
 	}
 };
@@ -356,15 +362,27 @@ void Volume::init() {
 	volume_texture = createVolume();
 	printf("volume texture created\n");
 	//volume_texture = create_volumetexture();
+	
+	for (int i = 0; i < 256; i++) {
+		printf("%3d	\t%3d %3d %3d %3d\n", 
+			i, 
+			transfer[4*i + 0],
+			transfer[4*i + 1],
+			transfer[4*i + 2],
+			transfer[4*i + 3]);
+	}
 
-	GLuint transferTexture;
 	glGenTextures(1, &transferTexture);
 	glBindTexture(GL_TEXTURE_1D, transferTexture);
-	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, transfer);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	glTexParameterf(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, &transfer[0]);
+
+	errcheck();
+
+	free(transfer);
 
 	initialized = true;
 }
@@ -562,7 +580,18 @@ GLuint Volume::createVolume() {
 }
 
 void Volume::computeTransferFunction() {
-	// Test spline
+	// Test spline CT_BONE
+	/*
+	 colorFun->AddRGBPoint( -3024, 0, 0, 0, 0.5, 0.0 );
+      colorFun->AddRGBPoint( -16, 0.73, 0.25, 0.30, 0.49, .61 );
+      colorFun->AddRGBPoint( 641, .90, .82, .56, .5, 0.0 );
+      colorFun->AddRGBPoint( 3071, 1, 1, 1, .5, 0.0 );
+      
+      opacityFun->AddPoint(-3024, 0, 0.5, 0.0 );
+      opacityFun->AddPoint(-16, 0, .49, .61 );
+      opacityFun->AddPoint(641, .72, .5, 0.0 );
+      opacityFun->AddPoint(3071, .71, 0.5, 0.0);
+	  */
 	colorKnots.push_back( new TransferControlPoint(.91f, .7f, .61f, 0) );
 	colorKnots.push_back( new TransferControlPoint(.91f, .7f, .61f, 80) );
 	colorKnots.push_back( new TransferControlPoint(1.0f, 1.0f, .85f, 82) );
@@ -612,15 +641,15 @@ void Volume::computeTransferFunction() {
 		}
 	}
 
-	transfer = new GLubyte[4 * 256];
+	transfer = (GLubyte*)malloc(4 * 256 * sizeof(GLubyte));
 	for (int i = 0; i < 256; i++)
 	{
-		Eigen::Vector4f color = transferFunc[i];
+		Eigen::Vector4f color = 255.f*transferFunc[i];
 		//store rgba
-		transfer[4*i + 0] = 255*color.x();
-		transfer[4*i + 1] = 255*color.y();
-		transfer[4*i + 2] = 255*color.z();
-		transfer[4*i + 3] = 255*color.w();
+		transfer[4*i + 0] = color.x();
+		transfer[4*i + 1] = color.y();
+		transfer[4*i + 2] = color.z();
+		transfer[4*i + 3] = color.w();
 	}
 }
 
@@ -1016,6 +1045,7 @@ void Volume::render(Camera* camera) {
 	glPushMatrix();
 	glLoadIdentity();
 
+
 	cgGLEnableProfile(fragmentProfile);
 	cgGLBindProgram(fProgram);
 	CheckCgError();
@@ -1029,7 +1059,7 @@ void Volume::render(Camera* camera) {
 	cgGLEnableTextureParameter(cgBackTexData);					// Enable cgBackTexData
 	cgGLEnableTextureParameter(cgVolumeTexData);				// Enable cgVolumeTexData
 	cgGLEnableTextureParameter(cgTransferTexData);				// Enable cgTransferTexData
-	
+
 	glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
 	
 	glBegin(GL_TRIANGLE_FAN);
@@ -1042,6 +1072,11 @@ void Volume::render(Camera* camera) {
 	glTexCoord2f(0, 0);
 	glVertex3f(0, TEXTURE_SIZE, 0);
 	glEnd();
+
+	cgGLDisableTextureParameter(cgFrontTexData);				// Disable cgFrontTexData
+	cgGLDisableTextureParameter(cgBackTexData);					// Disable cgBackTexData
+	cgGLDisableTextureParameter(cgVolumeTexData);				// Disable cgVolumeTexData
+	cgGLDisableTextureParameter(cgTransferTexData);				// Disable cgTransferTexData
 	
 	// disable shader
 	cgGLDisableProfile(fragmentProfile);
@@ -1049,7 +1084,7 @@ void Volume::render(Camera* camera) {
 
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glDisable(GL_TEXTURE_2D);
-	
+
 	glMatrixMode(GL_PROJECTION);
 	glPopMatrix();
 	glMatrixMode(GL_MODELVIEW);
