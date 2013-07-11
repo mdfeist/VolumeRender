@@ -64,7 +64,12 @@ float length(float3 p) {							// Get the length of a float3
 }
 
 inline int clamp(int x, int a, int b) {
-    return x < a ? a : (x > b ? b : x);
+	if (x < a)
+		x = a;
+	if (x > b)
+		x = b;
+
+    return x;
 }
 
 /// <summary>
@@ -76,11 +81,11 @@ inline int clamp(int x, int a, int b) {
 class CubicSingle
 {
 private:
-	double a, b, c, d; // a + b*s + c*s^2 +d*s^3 
+	float a, b, c, d; // a + b*s + c*s^2 +d*s^3 
 
 public:
 	CubicSingle() {}
-	CubicSingle(double a, double b, double c, double d)
+	CubicSingle(float a, float b, float c, float d)
 	{
 		this->a = a;
 		this->b = b;
@@ -88,25 +93,25 @@ public:
 		this->d = d;
 	}
 
-	double A() { return a; }
-	double B() { return b; }
-	double C() { return c; }
-	double D() { return d; }
+	float A() { return a; }
+	float B() { return b; }
+	float C() { return c; }
+	float D() { return d; }
 
 	//evaluate the point using a cubic equation
-	double GetPointOnSpline(float s)
+	float GetPointOnSpline(float s)
 	{
 		return (((d * s) + c) * s + b) * s + a;
 	}
 
-	static CubicSingle* calcNaturalCubic(int n, double* x, double* gamma) {
-        double* delta = new double[n + 1];
+	static CubicSingle* calcNaturalCubic(int n, float* x, float* gamma) {
+        float* delta = new float[n + 1];
         delta[0] = 3 * (x[1] - x[0]) * gamma[0];
         for (int i = 1; i < n; ++i)
             delta[i] = (3 * (x[i + 1] - x[i - 1]) - delta[i - 1]) * gamma[i];
         delta[n] = (3 * (x[n] - x[n - 1])-delta[n - 1]) * gamma[n];
 
-        double* D = new double[n + 1];
+        float* D = new float[n + 1];
         D[n] = delta[n];
         for (int i = n - 1; i >= 0; --i) {
             D[i] = delta[i] - gamma[i] * D[i + 1];
@@ -115,10 +120,10 @@ public:
         // Calculate the cubic segments.
         CubicSingle* C = new CubicSingle[n];
         for (int i = 0; i < n; i++) {
-            double a = x[i];
-            double b = D[i];
-            double c = 3 * (x[i + 1] - x[i]) - 2 * D[i] - D[i + 1];
-            double d = 2 * (x[i] - x[i + 1]) + D[i] + D[i + 1];
+            float a = x[i];
+            float b = D[i];
+            float c = 3 * (x[i + 1] - x[i]) - 2 * D[i] - D[i + 1];
+            float d = 2 * (x[i] - x[i + 1]) + D[i] + D[i + 1];
             C[i] = CubicSingle(a, b, c, d);
         }
 
@@ -149,16 +154,16 @@ public:
 
 	static std::vector<Cubic*> CalculateCubicSpline(int n, std::vector<TransferControlPoint*> v)
 	{
-		double* gamma = new double[n + 1];
+		float* gamma = new float[n + 1];
 		gamma[0] = 1.0 / 2.0;
 		for (int i = 1; i < n; ++i)
 			gamma[i] = 1 / (4 - gamma[i - 1]);
 		gamma[n] = 1 / (2 - gamma[n - 1]);
 
-		double* red = new double[n + 1];
-		double* green = new double[n + 1];
-		double* blue = new double[n + 1];
-		double* alpha = new double[n + 1];
+		float* red = new float[n + 1];
+		float* green = new float[n + 1];
+		float* blue = new float[n + 1];
+		float* alpha = new float[n + 1];
 
 		for (int i = 0; i < n + 1; i++)
 		{
@@ -167,6 +172,7 @@ public:
 			blue[i] = v[i]->Color.z();
 			alpha[i] = v[i]->Color.w();
 		}
+
 		// now compute the coefficients of the cubics 
 		std::vector<Cubic*> C(n);
 		for (int i = 0; i < n; i++)
@@ -644,13 +650,23 @@ void Volume::computeTransferFunction() {
 	transfer = (GLubyte*)malloc(4 * 256 * sizeof(GLubyte));
 	for (int i = 0; i < 256; i++)
 	{
-		Eigen::Vector4f color = 255.f*transferFunc[i];
+		//Eigen::Vector4f color = 255.f*transferFunc[i];
+
+		printf("%5f %5f %5f %5f\n",
+			transferFunc[i].x(),
+			transferFunc[i].y(),
+			transferFunc[i].z(),
+			transferFunc[i].w());
+		//printf("%d\n", (int)(255.f*transferFunc[i].w()));
+
 		//store rgba
-		transfer[4*i + 0] = color.x();
-		transfer[4*i + 1] = color.y();
-		transfer[4*i + 2] = color.z();
-		transfer[4*i + 3] = color.w();
+		transfer[4*i + 0] = (GLubyte)clamp((int)(255.f*transferFunc[i].x()), 0, 255);
+		transfer[4*i + 1] = (GLubyte)clamp((int)(255.f*transferFunc[i].y()), 0, 255);
+		transfer[4*i + 2] = (GLubyte)clamp((int)(255.f*transferFunc[i].z()), 0, 255);
+		transfer[4*i + 3] = (GLubyte)clamp((int)(255.f*transferFunc[i].w()), 0, 255);
 	}
+
+	Sleep(30000);
 }
 
 /// <summary>
