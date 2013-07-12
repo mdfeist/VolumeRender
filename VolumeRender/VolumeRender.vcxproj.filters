@@ -28,6 +28,9 @@
     <None Include="shader\raycastDiffuse.cg">
       <Filter>Resource Files\shader</Filter>
     </None>
+    <None Include="shader\diffuse.cg">
+      <Filter>Resource Files\shader</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">

@@ -15,7 +15,7 @@
 #include "Cubic.h"
 
 // All textures for the buffer are TEXTURE_SIZExTEXTURE_SIZE in dimensions
-#define TEXTURE_SIZE 1024
+#define TEXTURE_SIZE 512
 // Used to find the offset of variables in a structure (found when binding the VBO)
 #define MEMBER_OFFSET(s,m) ((char *)NULL + (offsetof(s,m)))
 // The size of the volume test data
@@ -62,6 +62,11 @@ struct Vertex										// Vertex used for creating VBO
 		m_Normal = norm;							// Set normal
 	}
 };
+
+typedef struct ThreadVolume {
+    Volume* volume;
+    int z;
+} ThreadVolume, *PtrThreadVolume;
 
 float length(float3 p) {							// Get the length of a float3
 	return sqrtf(p.x*p.x + p.y*p.y + p.z*p.z);
@@ -182,6 +187,7 @@ void CheckCgError(void) {
 	CGerror err = cgGetError();
 	if (err != CG_NO_ERROR) {
 		fprintf(stderr, "CG error: %s\n", cgGetErrorString(err));
+		Sleep(1000);
 	}
 }
 
@@ -233,21 +239,34 @@ void Volume::init() {
 
 	front_facing = newTexture(TEXTURE_SIZE, TEXTURE_SIZE);
 	back_facing = newTexture(TEXTURE_SIZE, TEXTURE_SIZE);
+
+	colorTexture = newTexture(TEXTURE_SIZE, TEXTURE_SIZE);
+	positionTexture = newTexture(TEXTURE_SIZE, TEXTURE_SIZE);
 	printf("Textures created\n");
 
-	char shaderFile[] = "shader/raycastDiffuse.cg";
-	if (setupCg(&context, &fProgram, &fragmentProfile, shaderFile)) {
+	char shaderFirstPassFile[] = "shader/raycastDiffuse.cg";
+	if (setupCg(&context, &fProgramFirstPass, &fragmentProfile, shaderFirstPassFile)) {
 		fprintf(stderr, "Error: %s\n", "Initializing Cg");
 		CheckCgError();
 	}
 
-	cgFrontTexData = cgGetNamedParameter(fProgram, "frontTexData");
-	cgBackTexData = cgGetNamedParameter(fProgram, "backTexData");
-	cgVolumeTexData = cgGetNamedParameter(fProgram, "VolumeS");
-	cgTransferTexData = cgGetNamedParameter(fProgram, "TransferS");
-	cgStepSize = cgGetNamedParameter(fProgram, "stepSize");
+	cgFrontTexData = cgGetNamedParameter(fProgramFirstPass, "frontTexData");
+	cgBackTexData = cgGetNamedParameter(fProgramFirstPass, "backTexData");
+	cgDepthTexData = cgGetNamedParameter(fProgramFirstPass, "depthTexData");
+	cgVolumeTexData = cgGetNamedParameter(fProgramFirstPass, "VolumeS");
+	cgTransferTexData = cgGetNamedParameter(fProgramFirstPass, "TransferS");
+	cgStepSize = cgGetNamedParameter(fProgramFirstPass, "stepSize");
 
-	cgGLSetParameter1f(cgStepSize, 1.0f/100.0f);				// Set the incremental step size of the ray cast
+	cgGLSetParameter1f(cgStepSize, 1.0f/512.0f);				// Set the incremental step size of the ray cast
+
+	char shaderSecondPassFile[] = "shader/diffuse.cg";
+	if (setupCg(&context, &fProgramSecondPass, &fragmentProfile, shaderSecondPassFile)) {
+		fprintf(stderr, "Error: %s\n", "Initializing Cg");
+		CheckCgError();
+	}
+
+	cgColorTexData = cgGetNamedParameter(fProgramSecondPass, "colorTexData");
+	cgPositionTexData = cgGetNamedParameter(fProgramSecondPass, "positionTexData");
 
 	createCube(1.0f, 1.0f, 1.0f);
 	printf("Cube created\n");
@@ -286,35 +305,6 @@ bool Volume::needsInit() {
 }
 
 int Volume::loadVolume(char *directory) {
-	std::cout << "- Computing Transfer Function" << std::endl; 
-	computeTransferFunction();
-
-	// reopen file, and read the data
-	FILE* dataFile = fopen("file.bin", "r");
-
-	if (dataFile) {
-		std::cout << "- Saved File Found" << std::endl; 
-		fread(&volumeWidth, sizeof(int), 1, dataFile); 
-		fread(&volumeHeight, sizeof(int), 1, dataFile);
-		fread(&volumeDepth, sizeof(int), 1, dataFile); 
-
-		std::cout << "- Volume Size: " 
-			<< "[" 
-			<< volumeWidth << ", "
-			<< volumeHeight << ", "
-			<< volumeDepth
-			<< "]" << std::endl;
-
-		pixelCount = volumeWidth * volumeHeight * volumeDepth;
-		int dataSize = pixelCount * 4;
-		data = (GLubyte*)malloc(sizeof(GLubyte) * dataSize);
-		fread(data, sizeof(GLubyte), dataSize, dataFile);
-
-		fclose(dataFile);
-
-		return EXIT_SUCCESS;
-	}
-
 	typedef signed short    PixelType;
 	const unsigned int      Dimension = 3;
 
@@ -413,9 +403,8 @@ int Volume::loadVolume(char *directory) {
 
 
 		// Create array for iso values
-		data = new GLubyte[pixelCount * 4];
-		mSamples = new float[pixelCount];
-		memset(data, 0, pixelCount * 4);
+		data = new GLubyte[pixelCount];
+		memset(data, 0, pixelCount);
 
 		std::cout << "- Normalizing data" << std::endl; 
 
@@ -432,7 +421,7 @@ int Volume::loadVolume(char *directory) {
 			else if (normal > 1.f)
 				normal = 1.f;
 
-			mSamples[i] = normal;
+			data[i] = (GLubyte)(255.f*normal);
 		}
 	}
 	catch (itk::ExceptionObject &ex)
@@ -441,49 +430,8 @@ int Volume::loadVolume(char *directory) {
 		return EXIT_FAILURE;
     }
 
-	std::cout << "- Computing Gradients" << std::endl; 
-	//generate normals from gradients
-	std::cout << "- Size: " << pixelCount << std::endl; 
-
-	std::cout << "- Initializing Gradients" << std::endl;
-	for (unsigned int i = 0; i < pixelCount; i++)
-	{
-		data[4*i + 0] = 0;
-		data[4*i + 1] = 0;
-		data[4*i + 2] = 0;
-	}
-
-	std::cout << "- Generate Gradients" << std::endl;
-	generateGradients(1);
-
-	std::cout << "- Computing Filter" << std::endl; 
-	//filter the gradients with an NxNxN box filter
-	filterNxNxN(3);
-
-	for (int i = 0; i < pixelCount; i++)
-	{
-		data[4*i + 3] = 255*mSamples[i];
-	}
-
-	FILE* fp = fopen("data.bin", "w");
-	// write it to a file
-	fwrite(&volumeWidth, sizeof(int), 1, fp);
-	fwrite(&volumeHeight, sizeof(int), 1, fp);
-	fwrite(&volumeDepth, sizeof(int), 1, fp);
-	fwrite(data, sizeof(GLubyte), 4*pixelCount, fp);
-	fclose(fp);
-	
-	/*
-	for (unsigned int i = 0; i < pixelCount; i++)
-	{
-		data[4*i + 0] = 255;
-		data[4*i + 1] = 255;
-		data[4*i + 2] = 255;
-		data[4*i + 3] = 255*mSamples[i];
-	}
-	*/
-
-	delete mSamples;
+	std::cout << "- Computing Transfer Function" << std::endl; 
+	computeTransferFunction();
 	
 	return EXIT_SUCCESS;
 
@@ -500,9 +448,9 @@ GLuint Volume::createVolume() {
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
 	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
-	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, 
+	glTexImage3D(GL_TEXTURE_3D, 0, GL_RED, 
 		volumeWidth, volumeHeight, volumeDepth, 
-		0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+		0, GL_RED, GL_UNSIGNED_BYTE, data);
 
 	delete []data;
 
@@ -523,17 +471,16 @@ void Volume::computeTransferFunction() {
       opacityFun->AddPoint(3071, .71, 0.5, 0.0);
 	  */
 	colorKnots.push_back( new TransferControlPoint(.91f, .7f, .61f, 0) );
-	colorKnots.push_back( new TransferControlPoint(.91f, .7f, .61f, 80) );
-	colorKnots.push_back( new TransferControlPoint(1.0f, 1.0f, .85f, 82) );
+	colorKnots.push_back( new TransferControlPoint(.91f, .7f, .61f, 120) );
+	colorKnots.push_back( new TransferControlPoint(1.0f, 1.0f, .85f, 150) );
 	colorKnots.push_back( new TransferControlPoint(1.0f, 1.0f, .85f, 256) );
 
 	alphaKnots.push_back( new TransferControlPoint(0.0f, 0) );
 	alphaKnots.push_back( new TransferControlPoint(0.0f, 40) );
 	alphaKnots.push_back( new TransferControlPoint(0.2f, 60) );
-	alphaKnots.push_back( new TransferControlPoint(0.05f, 73) );
+	alphaKnots.push_back( new TransferControlPoint(0.05f, 63) );
 	alphaKnots.push_back( new TransferControlPoint(0.0f, 80) );
-	alphaKnots.push_back( new TransferControlPoint(0.0f, 150) );
-	alphaKnots.push_back( new TransferControlPoint(0.9f, 175) );
+	alphaKnots.push_back( new TransferControlPoint(0.9f, 83) );
 	alphaKnots.push_back( new TransferControlPoint(1.f, 256) );
 
 	//initialize the cubic spline for the transfer function
@@ -601,178 +548,12 @@ void Volume::computeTransferFunction() {
 	transfer = (GLubyte*)malloc(4 * 256 * sizeof(GLubyte));
 	for (int i = 0; i < 256; i++)
 	{
-		//Eigen::Vector4f color = 255.f*transferFunc[i];
-		/*
-		printf("%3d %3d %3d %3d\n",
-			clamp((int)(255.f*transferFunc[i].x()), 0, 255),
-			clamp((int)(255.f*transferFunc[i].y()), 0, 255),
-			clamp((int)(255.f*transferFunc[i].z()), 0, 255),
-			clamp((int)(255.f*transferFunc[i].w()), 0, 255));
-		//printf("%d\n", (int)(255.f*transferFunc[i].w()));
-		*/
 		//store rgba
 		transfer[4*i + 0] = (GLubyte)clamp((int)(255.f*transferFunc[i].x()), 0, 255);
 		transfer[4*i + 1] = (GLubyte)clamp((int)(255.f*transferFunc[i].y()), 0, 255);
 		transfer[4*i + 2] = (GLubyte)clamp((int)(255.f*transferFunc[i].z()), 0, 255);
 		transfer[4*i + 3] = (GLubyte)clamp((int)(255.f*transferFunc[i].w()), 0, 255);
 	}
-}
-
-/// <summary>
-/// Generates gradients using a central differences scheme.
-/// </summary>
-/// <param name="sampleSize">The size/radius of the sample to take.</param>
-void Volume::generateGradients(int sampleSize)
-{
-	int n = sampleSize;
-
-	int index = 0;
-	for (int z = 0; z < volumeDepth; z++)
-	{
-		loadingBar(z, volumeDepth, 30);
-		for (int y = 0; y < volumeHeight; y++)
-		{
-			for (int x = 0; x < volumeWidth; x++)
-			{
-				float xDiff = sampleVolume(x + n, y, z) - sampleVolume(x - n, y, z);
-				float yDiff = sampleVolume(x, y + n, z) - sampleVolume(x, y - n, z);
-				float zDiff = sampleVolume(x, y, z + n) - sampleVolume(x, y, z - n);
-
-				float size_squared = xDiff*xDiff + yDiff*yDiff + zDiff*zDiff;
-
-				if (size_squared == 0.f) {
-					data[4*index + 0] = 0;
-					data[4*index + 1] = 0;
-					data[4*index + 2] = 0;
-				} else {
-					float size = sqrtf(size_squared);
-					xDiff /= size;
-					yDiff /= size;
-					zDiff /= size;
-					data[4*index + 0] = clamp((int)(255.f*xDiff), 0, 255);
-					data[4*index + 1] = clamp((int)(255.f*yDiff), 0, 255);
-					data[4*index + 2] = clamp((int)(255.f*zDiff), 0, 255);
-				}
-				
-				index++;
-			}
-		}
-	}
-}
-
-/// <summary>
-/// Applies an NxNxN filter to the gradients. 
-/// Should be an odd number of samples. 3 used by default.
-/// </summary>
-/// <param name="n"></param>
-void Volume::filterNxNxN(int n)
-{
-	int index = 0;
-	for (int z = 0; z < volumeDepth; z++)
-	{
-		loadingBar(z, volumeDepth, 30);
-		for (int y = 0; y < volumeHeight; y++)
-		{
-			for (int x = 0; x < volumeWidth; x++)
-			{
-				Eigen::Vector3f sample = sampleNxNxN(x, y, z, n);
-				
-				data[4*index + 0] = clamp((int)(255.f*sample.x()), 0, 255);
-				data[4*index + 1] = clamp((int)(255.f*sample.y()), 0, 255);
-				data[4*index + 2] = clamp((int)(255.f*sample.z()), 0, 255);
-
-				index++;
-			}
-		}
-	}
-}
-
-/// <summary>
-/// Samples the sub-volume graident volume and returns the average.
-/// Should be an odd number of samples.
-/// </summary>
-/// <param name="x"></param>
-/// <param name="y"></param>
-/// <param name="z"></param>
-/// <param name="n"></param>
-/// <returns></returns>
-Eigen::Vector3f Volume::sampleNxNxN(int x, int y, int z, int n)
-{
-	n = (n - 1) / 2;
-
-	Eigen::Vector3f average = Eigen::Vector3f::Zero();
-	int num = 0;
-
-	for (int k = z - n; k <= z + n; k++)
-	{
-		for (int j = y - n; j <= y + n; j++)
-		{
-			for (int i = x - n; i <= x + n; i++)
-			{
-				if (isInBounds(i, j, k))
-				{
-					average += sampleGradients(i, j, k);
-					num++;
-				}
-			}
-		}
-	}
-
-	average /= (float)num;
-	if (average.x() != 0.0f && average.y() != 0.0f && average.z() != 0.0f)
-		average.normalize();
-
-	return average;
-}
-
-/// <summary>
-/// Samples the scalar volume
-/// </summary>
-/// <param name="x"></param>
-/// <param name="y"></param>
-/// <param name="z"></param>
-/// <returns></returns>
-float Volume::sampleVolume(int x, int y, int z)
-{
-	x = clamp(x, 0, volumeWidth - 1);
-	y = clamp(y, 0, volumeHeight - 1);
-	z = clamp(z, 0, volumeDepth - 1);
-
-	int index = x + (y * volumeWidth) + (z * volumeWidth * volumeHeight);
-	return (float)mSamples[index];
-}
-
-/// <summary>
-/// Samples the gradient volume
-/// </summary>
-/// <param name="x"></param>
-/// <param name="y"></param>
-/// <param name="z"></param>
-/// <returns></returns>
-Eigen::Vector3f Volume::sampleGradients(int x, int y, int z)
-{
-	int index = x + (y * volumeWidth) + (z * volumeWidth * volumeHeight);
-
-	Eigen::Vector3f sample = Eigen::Vector3f(
-		data[4*index + 0] / 255.f,
-		data[4*index + 1] / 255.f,
-		data[4*index + 2] / 255.f);
-
-	return sample;
-}
-
-/// <summary>
-/// Checks whether the input is in the bounds of the volume data array
-/// </summary>
-/// <param name="x"></param>
-/// <param name="y"></param>
-/// <param name="z"></param>
-/// <returns></returns>
-bool Volume::isInBounds(int x, int y, int z)
-{
-	return ((x >= 0 && x < volumeWidth) &&
-		(y >= 0 && y < volumeHeight) &&
-		(z >= 0 && z < volumeDepth));
 }
 
 void Volume::createCube(float x, float y, float z) {
@@ -832,16 +613,23 @@ GLuint Volume::setupFBO() {													// Create a new frame buffer for off scr
 	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_handle);					// Bind buffer
 
 	// The depth buffer
-	GLuint depthrenderbuffer;
 	glGenRenderbuffers(1, &depthrenderbuffer);								// Create depth buffer
 	glBindRenderbuffer(GL_RENDERBUFFER, depthrenderbuffer);					// Bind buffer
+
+	// No need to force GL_DEPTH_COMPONENT24, drivers usually give you the max precision if available
+	glTexImage2D( GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, TEXTURE_SIZE, TEXTURE_SIZE, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	// attach the texture to FBO depth attachment point
+	glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_DEPTH_ATTACHMENT_EXT, GL_TEXTURE_2D, depthrenderbuffer, 0);
+	/*
 	glRenderbufferStorage(GL_RENDERBUFFER,									// Create storage
 		GL_DEPTH_COMPONENT,													// Specify that the internal format is the depth component
 		TEXTURE_SIZE, TEXTURE_SIZE);										// Set storage width and height
 	glFramebufferRenderbuffer(GL_FRAMEBUFFER,								// Attach depth buffer to frame buffer
 		GL_DEPTH_ATTACHMENT,												// Specify that the internal format is the depth component
 		GL_RENDERBUFFER, depthrenderbuffer);								// Attach depth render buffer texture to the frame buffer
-
+	*/
 	errcheck();																// Check for errors
 
 	unbindFBO();															// Unbind frame buffer object
@@ -849,19 +637,27 @@ GLuint Volume::setupFBO() {													// Create a new frame buffer for off scr
 	return fbo_handle;														// Return new frame buffer
 }
 
-bool Volume::bindFBO(GLuint fbo_handle, GLuint fbo_texture) {				// Bind frame buffer and attach texture for rendering
-	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_handle);					// Bind frame buffer
+bool Volume::bindFBO(GLuint fbo_handle, GLuint *fbo_texture, GLsizei size) {	// Bind frame buffer and attach textures for rendering
+	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_handle);						// Bind frame buffer
 
-	glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT,							// Set fbo_texture as our color attachment #0
-		GL_COLOR_ATTACHMENT0_EXT,
-		GL_TEXTURE_2D, fbo_texture, 0);
+	if (size > GL_MAX_COLOR_ATTACHMENTS)
+		size = GL_MAX_COLOR_ATTACHMENTS;
+
+	for (int i = 0; i < size; i++)
+		glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT,							// Set fbo_texture as our color attachment #0
+			GL_COLOR_ATTACHMENT0_EXT + i,
+			GL_TEXTURE_2D, fbo_texture[i], 0);
 
 	//errcheck();
 
-	GLenum dbuffers[2] = { GL_COLOR_ATTACHMENT0_EXT };						// Set the list of draw buffers.
-	glDrawBuffers(1, dbuffers);												// Set Draw buffers
+	GLenum dbuffers[GL_MAX_COLOR_ATTACHMENTS];						 			// Set the list of draw buffers.
+
+	for (int i = 0; i < size; i++)
+		dbuffers[i] = GL_COLOR_ATTACHMENT0_EXT + i;
+
+	glDrawBuffers(size, dbuffers);												// Set Draw buffers
 	
-	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) // Always check that our frame buffer is ok
+	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)		// Always check that our frame buffer is ok
 		return false;
 
 	return true;
@@ -974,17 +770,7 @@ void Volume::render(Camera* camera) {
 	
 	glEnable(GL_TEXTURE_2D);							// Enable 2D textures
 	
-	bindFBO(FBO, front_facing);							// Render to our frame buffer using the front_facing texture
-	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);	// Clear color and depth buffer's
-
-	glEnable(GL_CULL_FACE);								// Enable the ability to remove face's
-	glCullFace(GL_BACK);								// Remove back facing face's
-	glDrawArrays( GL_QUADS, 0, 24 );					// Render Front Facing
-	glDisable(GL_CULL_FACE);							// Disable the ability to remove face's
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);				// Unbind frame buffer
-	
-	bindFBO(FBO, back_facing);							// Render to our frame buffer using the back_facing texture
+	bindFBO(FBO, &back_facing,  1);						// Render to our frame buffer using the back_facing texture
 	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);	// Clear color and depth buffer's
 
 	glEnable(GL_CULL_FACE);								// Enable the ability to remove face's
@@ -992,6 +778,16 @@ void Volume::render(Camera* camera) {
 	glDrawArrays( GL_QUADS, 0, 24 );					// Render Back Facing
 	glDisable(GL_CULL_FACE);							// Disable the ability to remove face's
 	
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);				// Unbind frame buffer
+
+	bindFBO(FBO, &front_facing, 1);						// Render to our frame buffer using the front_facing texture
+	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);	// Clear color and depth buffer's
+
+	glEnable(GL_CULL_FACE);								// Enable the ability to remove face's
+	glCullFace(GL_BACK);								// Remove back facing face's
+	glDrawArrays( GL_QUADS, 0, 24 );					// Render Front Facing
+	glDisable(GL_CULL_FACE);							// Disable the ability to remove face's
+
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);				// Unbind frame buffer
 
 	// Unbind buffers so client-side vertex arrays still work.
@@ -1002,10 +798,9 @@ void Volume::render(Camera* camera) {
 	glDisableClientState(GL_COLOR_ARRAY);
 	glDisableClientState(GL_NORMAL_ARRAY);
 
-	glPopMatrix();										// Restore state
+	glPopMatrix();												// Restore state
 
-	// Render Volume
-	glViewport(0, 0, width, height);
+	// First Pass Render Volume
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
 	glOrtho(0, TEXTURE_SIZE, TEXTURE_SIZE, 0, -1.0f, 1.0f);
@@ -1013,18 +808,23 @@ void Volume::render(Camera* camera) {
 	glPushMatrix();
 	glLoadIdentity();
 
+	GLuint gBuffer[2] = {colorTexture, positionTexture};
+
+	bindFBO(FBO, gBuffer, 2);									// Render to our frame buffer using the front_facing texture
 
 	cgGLEnableProfile(fragmentProfile);
-	cgGLBindProgram(fProgram);
+	cgGLBindProgram(fProgramFirstPass);
 	CheckCgError();
 
 	// enable Cg shader and texture (a 'compute' fragment program)
 	cgGLSetTextureParameter(cgFrontTexData, front_facing);		// Bind front facing render to cgFrontTexData
 	cgGLSetTextureParameter(cgBackTexData, back_facing);		// Bind back facing render to cgBackTexData
+	cgGLSetTextureParameter(cgDepthTexData, depthrenderbuffer);
 	cgGLSetTextureParameter(cgVolumeTexData, volume_texture);	// Bind the voulume_texture to cgVolumeTexData
 	cgGLSetTextureParameter(cgTransferTexData, transferTexture);// Bind the transferTexture to cgTransferTexData
 	cgGLEnableTextureParameter(cgFrontTexData);					// Enable cgFrontTexData
 	cgGLEnableTextureParameter(cgBackTexData);					// Enable cgBackTexData
+	cgGLEnableTextureParameter(cgDepthTexData);					// Enable cgDepthTexData
 	cgGLEnableTextureParameter(cgVolumeTexData);				// Enable cgVolumeTexData
 	cgGLEnableTextureParameter(cgTransferTexData);				// Enable cgTransferTexData
 
@@ -1043,8 +843,52 @@ void Volume::render(Camera* camera) {
 
 	cgGLDisableTextureParameter(cgFrontTexData);				// Disable cgFrontTexData
 	cgGLDisableTextureParameter(cgBackTexData);					// Disable cgBackTexData
+	cgGLDisableTextureParameter(cgDepthTexData);				// Disable cgDepthTexData
 	cgGLDisableTextureParameter(cgVolumeTexData);				// Disable cgVolumeTexData
 	cgGLDisableTextureParameter(cgTransferTexData);				// Disable cgTransferTexData
+	
+	// disable shader
+	cgGLDisableProfile(fragmentProfile);
+	CheckCgError();
+
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);						// Unbind frame buffer
+
+	glPopMatrix();												// end the current object transformations
+
+	// Second Pass Render Volume
+	glViewport(0, 0, width, height);
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	glOrtho(0, TEXTURE_SIZE, TEXTURE_SIZE, 0, -1.0f, 1.0f);
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glLoadIdentity();
+	
+	cgGLEnableProfile(fragmentProfile);
+	cgGLBindProgram(fProgramSecondPass);
+	CheckCgError();
+
+	// enable Cg shader and texture (a 'compute' fragment program)
+	cgGLSetTextureParameter(cgColorTexData, colorTexture);		// Bind color render to cgColorTexData
+	cgGLSetTextureParameter(cgPositionTexData, positionTexture);// Bind position render to cgPositionTexData
+	cgGLEnableTextureParameter(cgColorTexData);					// Enable cgColorTexData
+	cgGLEnableTextureParameter(cgPositionTexData);				// Enable cgPositionTexData
+
+	glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
+	
+	glBegin(GL_TRIANGLE_FAN);
+	glTexCoord2f(0, 1);
+	glVertex3f(0, 0, 0);
+	glTexCoord2f(1, 1);
+	glVertex3f(TEXTURE_SIZE, 0, 0);
+	glTexCoord2f(1, 0);
+	glVertex3f(TEXTURE_SIZE, TEXTURE_SIZE, 0);
+	glTexCoord2f(0, 0);
+	glVertex3f(0, TEXTURE_SIZE, 0);
+	glEnd();
+	
+	cgGLDisableTextureParameter(cgColorTexData);				// Disable cgColorTexData
+	cgGLDisableTextureParameter(cgPositionTexData);				// Disable cgPositionTexData
 	
 	// disable shader
 	cgGLDisableProfile(fragmentProfile);

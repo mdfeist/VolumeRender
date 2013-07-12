@@ -23,6 +23,8 @@ public:
 	void init();
 	bool needsInit();
 
+	void filter(int z, int n);
+
 	void render(Camera*);
 private:
 	bool initialized;
@@ -32,35 +34,41 @@ private:
 
 	// Frame Buffer Object
 	GLuint FBO;
+	
+	// CG variables
+	CGcontext	context;
+	CGprofile	fragmentProfile;//CG_PROFILE_ARBFP1;
+
+	// First Pass
+	CGprogram	fProgramFirstPass;
+	CGparameter cgFrontTexData;
+	CGparameter cgBackTexData;
+	CGparameter cgDepthTexData;
+	CGparameter cgVolumeTexData;
+	CGparameter cgTransferTexData;
+	CGparameter cgStepSize;
 	// Textures
 	GLuint front_facing;
 	GLuint back_facing;
 	GLuint volume_texture;
 	GLuint transferTexture;
-	
-	// CG variables
-	CGcontext context;
-	CGprofile fragmentProfile;//CG_PROFILE_ARBFP1;
-	CGprogram fProgram;
-	CGparameter cgFrontTexData;
-	CGparameter cgBackTexData;
-	CGparameter cgVolumeTexData;
-	CGparameter cgTransferTexData;
-	CGparameter cgStepSize;
+	GLuint depthrenderbuffer;
+
+	// Second Pass
+	CGprogram	fProgramSecondPass;
+	CGparameter cgColorTexData;
+	CGparameter cgPositionTexData;
+	// Textures
+	GLuint colorTexture;
+	GLuint positionTexture;
 
 	void createCube(float x, float y, float z);
 	GLuint createVolume();
 	void computeTransferFunction();
-	void generateGradients(int sampleSize);
-	void filterNxNxN(int n);
-	Eigen::Vector3f sampleNxNxN(int x, int y, int z, int n);
-	float sampleVolume(int x, int y, int z);
-	Eigen::Vector3f sampleGradients(int x, int y, int z);
-	bool isInBounds(int x, int y, int z);
 
 	// FBO
 	GLuint setupFBO();
-	bool bindFBO(GLuint fbo_handle, GLuint fbo_texture);
+	bool bindFBO(GLuint fbo_handle, GLuint *fbo_texture, int size);
 	void unbindFBO();
 
 	// CG
@@ -73,7 +81,6 @@ private:
 	int volumeWidth, volumeHeight, volumeDepth;
 
 	GLubyte* transfer;
-	float *mSamples;
 
 	std::vector<TransferControlPoint*> colorKnots;
 	std::vector<TransferControlPoint*> alphaKnots;

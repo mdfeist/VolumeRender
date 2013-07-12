@@ -1,0 +1,90 @@
+const float offset = 1.f/512.f;
+const float offset_2 = 2.f/512.f;
+const float offset_4 = 4.f/512.f;
+const float offset_8 = 8.f/512.f;
+
+const float blurSize = 1.f/1024.f;
+
+float3 blur(uniform sampler2D texData, float2 coord) {
+	float3 sum = float3(0,0,0);
+	sum += tex2D(texData, float2(coord.x - 4.0*blurSize, coord.y)) * 0.05;
+	sum += tex2D(texData, float2(coord.x - 3.0*blurSize, coord.y)) * 0.09;
+	sum += tex2D(texData, float2(coord.x - 2.0*blurSize, coord.y)) * 0.12;
+	sum += tex2D(texData, float2(coord.x - blurSize, coord.y)) * 0.15;
+	sum += tex2D(texData, float2(coord.x, coord.y)) * 0.16;
+	sum += tex2D(texData, float2(coord.x + blurSize, coord.y)) * 0.15;
+	sum += tex2D(texData, float2(coord.x + 2.0*blurSize, coord.y)) * 0.12;
+	sum += tex2D(texData, float2(coord.x + 3.0*blurSize, coord.y)) * 0.09;
+	sum += tex2D(texData, float2(coord.x + 4.0*blurSize, coord.y)) * 0.05;
+
+	sum += tex2D(texData, float2(coord.x, coord.y - 4.0*blurSize)) * 0.05;
+	sum += tex2D(texData, float2(coord.x, coord.y - 3.0*blurSize)) * 0.09;
+	sum += tex2D(texData, float2(coord.x, coord.y - 2.0*blurSize)) * 0.12;
+	sum += tex2D(texData, float2(coord.x, coord.y - blurSize)) * 0.15;
+	sum += tex2D(texData, float2(coord.x, coord.y)) * 0.16;
+	sum += tex2D(texData, float2(coord.x, coord.y + blurSize)) * 0.15;
+	sum += tex2D(texData, float2(coord.x, coord.y + 2.0*blurSize)) * 0.12;
+	sum += tex2D(texData, float2(coord.x, coord.y + 3.0*blurSize)) * 0.09;
+	sum += tex2D(texData, float2(coord.x, coord.y + 4.0*blurSize)) * 0.05;
+
+	sum *= 0.5f;
+
+	return sum;
+}
+
+float3 getPosition(uniform sampler2D positionTexData, float2 screen) {
+	float depth = tex2D(positionTexData, screen).x;
+	screen.x = (screen.x * 2.0) - 1.0;
+	screen.y = (screen.y * 2.0) - 1.0;
+	depth = (depth * 2.0) - 1.0;
+	return float3(screen, depth);
+}
+
+void main(float2  texCoord : TEXCOORD0,
+	  uniform sampler2D colorTexData,
+	  uniform sampler2D positionTexData,
+	  out float4 color0 : COLOR0)
+{	
+	/*
+	 Set Vector U to (Triangle.p2 minus Triangle.p1)
+        Set Vector V to (Triangle.p3 minus Triangle.p1)
+ 
+        Set Normal.x to (multiply U.y by V.z) minus (multiply U.z by V.y)
+        Set Normal.y to (multiply U.z by V.x) minus (multiply U.x by V.z)
+        Set Normal.z to (multiply U.x by V.y) minus (multiply U.y by V.x)
+	*/
+
+	float3 p = getPosition(positionTexData, float2(texCoord.x + offset, texCoord.y - offset));
+	float3 p1 = getPosition(positionTexData, float2(texCoord.x, texCoord.y + offset_2));
+	float3 p2 = getPosition(positionTexData, float2(texCoord.x - offset_2, texCoord.y));
+	//float3 p3 = blur(positionTexData, float2(texCoord.x - offset, texCoord.y - offset_8));
+	//float3 p4 = blur(positionTexData, float2(texCoord.x + offset_4, texCoord.y + offset_2));
+	
+	float3 U1 = p1 - p;
+	float3 V1 = p2 - p;
+
+	//float3 U2 = p3 - p;
+	//float3 V2 = p4 - p;
+
+	float x1 = U1.y*V1.z - U1.z*V1.y;
+	float y1 = U1.z*V1.x - U1.x*V1.z;
+	float z1 = U1.x*V1.y - U1.y*V1.x;
+
+	//float x2 = U2.y*V2.z - U2.z*V2.y;
+	//float y2 = U2.z*V2.x - U2.x*V2.z;
+	//float z2 = U2.x*V2.y - U2.y*V2.x;
+	
+	float3 norm = float3(x1, y1, z1);
+	
+	norm = normalize(norm);
+
+	float3 L = normalize(float3(0, 1, 1));
+	float s = dot(L, norm);
+
+	s *= 0.5;
+
+	//color0 = float4(p, 1.0f);
+	color0 = s*tex2D(colorTexData, texCoord) + 0.5f*tex2D(colorTexData, texCoord);
+	//color0 = float4(blur(colorTexData, texCoord), 1.0f);
+	//color0 = tex2D(positionTexData, texCoord);
+}	
