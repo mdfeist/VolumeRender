@@ -23,7 +23,8 @@ public:
 	void init();
 	bool needsInit();
 
-	void filter(int z, int n);
+	void setIsoValue(float value);
+	void increaseIsoValue(float value);
 
 	void render(Camera*);
 private:
@@ -43,24 +44,24 @@ private:
 	CGprogram	fProgramFirstPass;
 	CGparameter cgFrontTexData;
 	CGparameter cgBackTexData;
-	CGparameter cgDepthTexData;
+	CGparameter cgNoiseTexData;
 	CGparameter cgVolumeTexData;
 	CGparameter cgTransferTexData;
 	CGparameter cgStepSize;
+	CGparameter cgisoValue;
 	// Textures
 	GLuint front_facing;
 	GLuint back_facing;
 	GLuint volume_texture;
 	GLuint transferTexture;
+	GLuint noiseTexture;
 	GLuint depthrenderbuffer;
 
 	// Second Pass
 	CGprogram	fProgramSecondPass;
 	CGparameter cgColorTexData;
-	CGparameter cgPositionTexData;
 	// Textures
 	GLuint colorTexture;
-	GLuint positionTexture;
 
 	void createCube(float x, float y, float z);
 	GLuint createVolume();
@@ -81,6 +82,7 @@ private:
 	int volumeWidth, volumeHeight, volumeDepth;
 
 	GLubyte* transfer;
+	float isoValue;
 
 	std::vector<TransferControlPoint*> colorKnots;
 	std::vector<TransferControlPoint*> alphaKnots;

@@ -18,7 +18,8 @@ int main(int argc, char* argv[])
 	Eigen::Quaternionf rotation(Eigen::AngleAxisf(-M_PI/2.0, Eigen::Vector3f(1.0, 0.0, 0.0)));
 	volume->setRotation(rotation);
 	
-	char volumeFile[] = "C:/Users/mdfeist/Desktop/COU IV";
+	//char volumeFile[] = "C:/Users/mdfeist/Desktop/COU IV";
+	char volumeFile[] = "C:/Users/mdfeist/Desktop/MANIX/MANIX/MANIX/CER-CT/ANGIO CT";
 	volume->loadVolume(volumeFile);
 
 	Renderer* render1 = new Renderer();

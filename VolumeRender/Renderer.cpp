@@ -6,6 +6,7 @@
 
 #include "Actor.h"
 #include "Camera.h"
+#include "Volume.h"
 
 extern "C" {
     _declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
@@ -158,8 +159,14 @@ void Renderer::render() {								// Render the scene
 	for each (Actor* a in actors) {						// Loop through actors
 		if (a->needsInit())								// Check if actor needs set up
 			a->init();									// Setup actor
-		else
+		else {
+			if (keys[VK_UP])
+				((Volume*)a)->increaseIsoValue(0.005f);
+			else if (keys[VK_DOWN])
+				((Volume*)a)->increaseIsoValue(-0.005f);
+
 			a->render(camera);							// Render actor
+		}
 	}
 
 	SwapBuffers(hDC);									// Swap Buffers (Double Buffering)
