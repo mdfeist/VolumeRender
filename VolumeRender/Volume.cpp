@@ -18,8 +18,6 @@
 #define TEXTURE_SIZE 1024
 // Used to find the offset of variables in a structure (found when binding the VBO)
 #define MEMBER_OFFSET(s,m) ((char *)NULL + (offsetof(s,m)))
-// The size of the volume test data
-#define VOLUME_TEX_SIZE 128
 
 struct float3 {										// A three dimensional float
 													// Variables for each dimension
@@ -62,11 +60,6 @@ struct Vertex										// Vertex used for creating VBO
 		m_Normal = norm;							// Set normal
 	}
 };
-
-typedef struct ThreadVolume {
-    Volume* volume;
-    int z;
-} ThreadVolume, *PtrThreadVolume;
 
 float length(float3 p) {							// Get the length of a float3
 	return sqrtf(p.x*p.x + p.y*p.y + p.z*p.z);
@@ -130,85 +123,6 @@ GLuint createNoise() {
 	return texture;															// Return texture
 }
 
-// create a test volume texture, here you could load your own volume
-GLuint create_volumetexture()
-{
-	int size = VOLUME_TEX_SIZE*VOLUME_TEX_SIZE*VOLUME_TEX_SIZE* 4;
-	GLubyte *data = new GLubyte[size];
-
-	for(int x = 0; x < VOLUME_TEX_SIZE; x++)
-	{for(int y = 0; y < VOLUME_TEX_SIZE; y++)
-	{for(int z = 0; z < VOLUME_TEX_SIZE; z++)
-	{
-		data[(x*4)   + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = z%250;
-		data[(x*4)+1 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = y%250;
-		data[(x*4)+2 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 250;
-		data[(x*4)+3 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 230;
-	  	
-		float3 p =	float3(x,y,z)- float3(VOLUME_TEX_SIZE-20,VOLUME_TEX_SIZE-30,VOLUME_TEX_SIZE-30);
-		bool test = (length(p) < 42);
-		if(test)
-			data[(x*4)+3 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 0;
-
-		p =	float3(x,y,z)- float3(VOLUME_TEX_SIZE/2,VOLUME_TEX_SIZE/2,VOLUME_TEX_SIZE/2);
-		test = (length(p) < 24);
-		if(test)
-			data[(x*4)+3 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 0;
-
-		
-		if(x > 20 && x < 40 && y > 0 && y < VOLUME_TEX_SIZE && z > 10 &&  z < 50)
-		{
-			
-			data[(x*4)   + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 100;
-		    data[(x*4)+1 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 250;
-		    data[(x*4)+2 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = y%100;
-			data[(x*4)+3 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 250;
-		}
-
-		if(x > 50 && x < 70 && y > 0 && y < VOLUME_TEX_SIZE && z > 10 &&  z < 50)
-		{
-			
-			data[(x*4)   + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 250;
-		    data[(x*4)+1 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 250;
-		    data[(x*4)+2 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = y%100;
-			data[(x*4)+3 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 250;
-		}
-
-		if(x > 80 && x < 100 && y > 0 && y < VOLUME_TEX_SIZE && z > 10 &&  z < 50)
-		{
-			
-			data[(x*4)   + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 250;
-		    data[(x*4)+1 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 70;
-		    data[(x*4)+2 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = y%100;
-			data[(x*4)+3 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 250;
-		}
-
-		p =	float3(x,y,z)- float3(24,24,24);
-		test = (length(p) < 40);
-		if(test)
-			data[(x*4)+3 + (y * VOLUME_TEX_SIZE * 4) + (z * VOLUME_TEX_SIZE * VOLUME_TEX_SIZE * 4)] = 0;
-
-			
-	}}}
-
-	GLuint volume_texture;
-	glPixelStorei(GL_UNPACK_ALIGNMENT,1);
-	glGenTextures(1, &volume_texture);
-	glBindTexture(GL_TEXTURE_3D, volume_texture);
-	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
-	glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_BORDER);
-	glTexImage3D(GL_TEXTURE_3D, 0, GL_RGBA, VOLUME_TEX_SIZE, VOLUME_TEX_SIZE, VOLUME_TEX_SIZE, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-
-	delete []data;
-	printf("volume texture created\n");
-
-	return volume_texture;
-}
-
 //Check for any GL Errors
 void errcheck() {
 	static GLenum errCode;
@@ -254,6 +168,9 @@ GLuint newTexture(int width, int height) {
 
 Volume::Volume(void) : Actor()												// Constructor
 {
+	data = NULL;
+	transfer = NULL;
+
 	cubeVerticesVBO = 0;													// Set cubeVerticesVBO to NULL
 	initialized = false;													// Set initialized to false
 
@@ -261,6 +178,10 @@ Volume::Volume(void) : Actor()												// Constructor
 	rotation = Eigen::Quaternionf::Identity();
 
 	isoValue = 0.0f;
+
+	spacingX = 1.f;
+	spacingY = 1.f;
+	spacingZ = 1.f;
 }
 
 
@@ -314,8 +235,10 @@ void Volume::init() {
 
 	volume_texture = createVolume();
 	printf("volume texture created\n");
-	//volume_texture = create_volumetexture();
 	
+	std::cout << "- Computing Transfer Function" << std::endl; 
+	computeTransferFunction();
+
 	/*
 	for (int i = 0; i < 256; i++) {
 		printf("%3d	\t%3d %3d %3d %3d\n", 
@@ -332,7 +255,7 @@ void Volume::init() {
 	glTexParameterf(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, &transfer[0]);
+	glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, transfer);
 
 	errcheck();
 
@@ -343,6 +266,51 @@ void Volume::init() {
 
 bool Volume::needsInit() {
 	return !initialized;
+}
+
+int Volume::loadRaw(char *directory) {
+	// reopen file, and read the data
+	FILE* dataFile = fopen(directory, "rb");
+
+	if (dataFile) {
+		if (data != NULL) {
+			delete[] data;
+			data = NULL;
+		}
+
+		std::cout << "- Saved File Found" << std::endl; 
+		fread(&spacingX, sizeof(float), 1, dataFile);
+		fread(&spacingY, sizeof(float), 1, dataFile); 
+		fread(&spacingZ, sizeof(float), 1, dataFile);
+		fread(&volumeWidth, sizeof(int), 1, dataFile); 
+		fread(&volumeHeight, sizeof(int), 1, dataFile);
+		fread(&volumeDepth, sizeof(int), 1, dataFile); 
+
+		
+		std::cout << "- Volume Spacing: " 
+			<< "[" 
+			<< spacingX << ", "
+			<< spacingY << ", "
+			<< spacingZ
+			<< "]" << std::endl;
+
+		std::cout << "- Volume Dimension: " 
+			<< "[" 
+			<< volumeWidth << ", "
+			<< volumeHeight << ", "
+			<< volumeDepth
+			<< "]" << std::endl;
+
+		pixelCount = volumeWidth * volumeHeight * volumeDepth;
+		data = new GLubyte[pixelCount];
+		fread(data, sizeof(GLubyte), pixelCount, dataFile);
+
+		fclose(dataFile);
+
+		return EXIT_SUCCESS;
+	}
+
+	return EXIT_FAILURE;
 }
 
 int Volume::loadVolume(char *directory) {
@@ -424,6 +392,7 @@ int Volume::loadVolume(char *directory) {
 
 		ImageType::RegionType region = image->GetLargestPossibleRegion();
 		ImageType::SizeType size = region.GetSize();
+		ImageType::SpacingType spacing = image->GetSpacing();
 
 		// Pointer to the start of the Image
 		signed short * bufferPointer = reader->GetOutput()->GetBufferPointer();
@@ -435,6 +404,10 @@ int Volume::loadVolume(char *directory) {
 		volumeHeight = size[1];
 		volumeDepth = size[2];
 
+		spacingX = spacing[0];
+		spacingY = spacing[1];
+		spacingZ = spacing[2];
+
 		std::cout << "- Volume Size: " 
 			<< "[" 
 			<< volumeWidth << ", "
@@ -442,6 +415,10 @@ int Volume::loadVolume(char *directory) {
 			<< volumeDepth
 			<< "]" << std::endl;
 
+		if (data != NULL) {
+			delete[] data;
+			data = NULL;
+		}
 
 		// Create array for iso values
 		data = new GLubyte[pixelCount];
@@ -449,8 +426,8 @@ int Volume::loadVolume(char *directory) {
 
 		std::cout << "- Normalizing data" << std::endl; 
 
-		float min = -500.f;
-		float max = 700.f;
+		float min = -1000.f;
+		float max = 1000.f;
 
 		// Normalize values
 		for (unsigned int i = 0; i < pixelCount; i++)
@@ -470,9 +447,6 @@ int Volume::loadVolume(char *directory) {
 		std::cout << ex << std::endl;
 		return EXIT_FAILURE;
     }
-
-	std::cout << "- Computing Transfer Function" << std::endl; 
-	computeTransferFunction();
 	
 	return EXIT_SUCCESS;
 
@@ -511,18 +485,37 @@ void Volume::computeTransferFunction() {
       opacityFun->AddPoint(641, .72, .5, 0.0 );
       opacityFun->AddPoint(3071, .71, 0.5, 0.0);
 	  */
-	colorKnots.push_back( new TransferControlPoint(.91f, .7f, .61f, 0) );
-	colorKnots.push_back( new TransferControlPoint(.91f, .7f, .61f, 120) );
-	colorKnots.push_back( new TransferControlPoint(1.0f, 1.0f, .85f, 150) );
-	colorKnots.push_back( new TransferControlPoint(1.0f, 1.0f, .85f, 256) );
+	colorKnots.push_back( new TransferControlPoint(0.f, 0.f, 0.f, 0) );			// Air
+	colorKnots.push_back( new TransferControlPoint(0.f, 0.f, 0.f, 63) );		// Air
+	colorKnots.push_back( new TransferControlPoint(0.98f, 0.78f, 0.89f, 64) );	// Lung
+	colorKnots.push_back( new TransferControlPoint(0.98f, 0.78f, 0.89f, 70) );	// Lung
+	colorKnots.push_back( new TransferControlPoint(0.98f, 0.78f, 0.89f, 112) );	// Fat
+	colorKnots.push_back( new TransferControlPoint(0.98f, 0.78f, 0.89f, 126) );	// Fat
+	colorKnots.push_back( new TransferControlPoint(0.5f, .5f, 1.0f, 127) );		// Water
+	colorKnots.push_back( new TransferControlPoint(1.0f, 0.25f, 0.25f, 128) );	// Blood/Muscle
+	colorKnots.push_back( new TransferControlPoint(1.0f, 0.25f, 0.25f, 132) );	// Blood/Muscle
+	colorKnots.push_back( new TransferControlPoint(0.5f, 0.25f, 0.25f, 133) );	// Liver
+	colorKnots.push_back( new TransferControlPoint(0.5f, 0.25f, 0.25f, 136) );	// Liver
+	colorKnots.push_back( new TransferControlPoint(0.75f, 0.25f, 0.25f, 140) );	// Soft Tissue
+	colorKnots.push_back( new TransferControlPoint(0.75f, 0.25f, 0.25f, 166) ); // Soft Tissue
+	colorKnots.push_back( new TransferControlPoint(1.0f, 1.0f, .85f, 167) );	// Bone
+	colorKnots.push_back( new TransferControlPoint(1.0f, 1.0f, .85f, 256) );	// Bone
 
-	alphaKnots.push_back( new TransferControlPoint(0.0f, 0) );
-	alphaKnots.push_back( new TransferControlPoint(0.0f, 40) );
-	alphaKnots.push_back( new TransferControlPoint(0.2f, 60) );
-	alphaKnots.push_back( new TransferControlPoint(0.05f, 63) );
-	alphaKnots.push_back( new TransferControlPoint(0.0f, 80) );
-	alphaKnots.push_back( new TransferControlPoint(0.9f, 83) );
-	alphaKnots.push_back( new TransferControlPoint(1.f, 256) );
+	alphaKnots.push_back( new TransferControlPoint(0.0f, 0) );		// Air
+	alphaKnots.push_back( new TransferControlPoint(0.0f, 63) );		// Air
+	alphaKnots.push_back( new TransferControlPoint(0.05f, 64) );	// Lung
+	alphaKnots.push_back( new TransferControlPoint(0.02f, 70) );	// Lung
+	alphaKnots.push_back( new TransferControlPoint(0.5f, 112) );	// Fat
+	alphaKnots.push_back( new TransferControlPoint(0.2f, 126) );	// Fat
+	alphaKnots.push_back( new TransferControlPoint(0.0f, 127) );	// Water
+	alphaKnots.push_back( new TransferControlPoint(0.2f, 128) );	// Blood/Muscle
+	alphaKnots.push_back( new TransferControlPoint(0.05f, 132) );	// Blood/Muscle
+	alphaKnots.push_back( new TransferControlPoint(0.3f, 133) );	// Liver
+	alphaKnots.push_back( new TransferControlPoint(0.1f, 136) );	// Liver
+	alphaKnots.push_back( new TransferControlPoint(0.7f, 140) );	// Soft Tissue
+	alphaKnots.push_back( new TransferControlPoint(0.35f, 166) );	// Soft Tissue
+	alphaKnots.push_back( new TransferControlPoint(0.95f, 210) );	// Bone
+	alphaKnots.push_back( new TransferControlPoint(1.f, 256) );		// Bone
 
 	//initialize the cubic spline for the transfer function
 	Eigen::Vector4f* transferFunc = new Eigen::Vector4f[256];
@@ -794,10 +787,11 @@ void Volume::render(Camera* camera) {
 
 	glScalef(
 		1.0f, 
-		(float)volumeHeight/volumeWidth, 
-		(float)volumeDepth/volumeWidth);
+		(spacingY/spacingX)*((float)volumeHeight/volumeWidth), 
+		(spacingZ/spacingX)*((float)volumeDepth/volumeWidth));
 
-	glScalef(2.f, 2.f, 2.f);
+	//glScalef(2.f, 2.f, 2.f);
+	glScalef(1.5f, 1.5f, 1.5f);
 
 	glTranslatef(position.x(), position.y(), position.z());	// set position of the texture cube
 
@@ -830,16 +824,6 @@ void Volume::render(Camera* camera) {
 	
 	glEnable(GL_TEXTURE_2D);							// Enable 2D textures
 	
-	bindFBO(FBO, &back_facing,  1);						// Render to our frame buffer using the back_facing texture
-	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);	// Clear color and depth buffer's
-
-	glEnable(GL_CULL_FACE);								// Enable the ability to remove face's
-	glCullFace(GL_FRONT);								// Remove front facing face's
-	glDrawArrays( GL_QUADS, 0, 24 );					// Render Back Facing
-	glDisable(GL_CULL_FACE);							// Disable the ability to remove face's
-	
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);				// Unbind frame buffer
-
 	bindFBO(FBO, &front_facing, 1);						// Render to our frame buffer using the front_facing texture
 	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);	// Clear color and depth buffer's
 
@@ -848,6 +832,16 @@ void Volume::render(Camera* camera) {
 	glDrawArrays( GL_QUADS, 0, 24 );					// Render Front Facing
 	glDisable(GL_CULL_FACE);							// Disable the ability to remove face's
 
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);				// Unbind frame buffer
+	
+	bindFBO(FBO, &back_facing,  1);						// Render to our frame buffer using the back_facing texture
+	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);	// Clear color and depth buffer's
+
+	glEnable(GL_CULL_FACE);								// Enable the ability to remove face's
+	glCullFace(GL_FRONT);								// Remove front facing face's
+	glDrawArrays( GL_QUADS, 0, 24 );					// Render Back Facing
+	glDisable(GL_CULL_FACE);							// Disable the ability to remove face's
+	
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);				// Unbind frame buffer
 
 	// Unbind buffers so client-side vertex arrays still work.
@@ -859,7 +853,7 @@ void Volume::render(Camera* camera) {
 	glDisableClientState(GL_NORMAL_ARRAY);
 
 	glPopMatrix();												// Restore state
-
+	
 	// First Pass Render Volume
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
@@ -912,7 +906,7 @@ void Volume::render(Camera* camera) {
 	CheckCgError();
 
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);						// Unbind frame buffer
-
+	
 	glPopMatrix();												// end the current object transformations
 
 	// Second Pass Render Volume

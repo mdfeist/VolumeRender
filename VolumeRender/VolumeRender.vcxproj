@@ -104,6 +104,7 @@
     <ClInclude Include="Thread.h" />
     <ClInclude Include="TransferControlPoint.h" />
     <ClInclude Include="Volume.h" />
+    <ClInclude Include="VolumeCube.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Camera.cpp" />

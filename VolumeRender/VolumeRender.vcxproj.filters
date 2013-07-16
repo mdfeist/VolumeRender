@@ -63,6 +63,9 @@
     <ClInclude Include="Cubic.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="VolumeCube.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">

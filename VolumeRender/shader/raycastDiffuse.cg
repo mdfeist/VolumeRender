@@ -50,7 +50,7 @@ void main(float2  texCoord : TEXCOORD0,
 	}
 
 	const float3 L = normalize(float3(0, 1, 1));
-
+	
 	const float DELTA = 0.001;
 	float3 sample1; float3 sample2; 
 	sample1.x = tex3D(VolumeS, pos - float3(DELTA, 0, 0)).x;

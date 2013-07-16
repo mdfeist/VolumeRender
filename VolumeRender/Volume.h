@@ -18,6 +18,7 @@ public:
 	Volume(void);
 	~Volume(void);
 
+	int loadRaw(char *directory);
 	int loadVolume(char *directory);
 
 	void init();
@@ -79,6 +80,7 @@ private:
 	// Volume
 	int pixelCount;
 	GLubyte *data;
+	float spacingX, spacingY, spacingZ;
 	int volumeWidth, volumeHeight, volumeDepth;
 
 	GLubyte* transfer;
