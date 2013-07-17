@@ -28,7 +28,7 @@
     <None Include="shader\raycastDiffuse.cg">
       <Filter>Resource Files\shader</Filter>
     </None>
-    <None Include="shader\diffuse.cg">
+    <None Include="shader\bicubic.cg">
       <Filter>Resource Files\shader</Filter>
     </None>
   </ItemGroup>

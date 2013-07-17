@@ -1,4 +1,6 @@
 #pragma once
+#include <Windows.h>
+
 #include "Actor.h"
 
 #include <GL/glew.h>
@@ -11,6 +13,9 @@
 #include <vector>
 
 class TransferControlPoint;
+class VolumeCube;
+
+struct VertexPositionColor;
 
 class Volume : public Actor
 {
@@ -23,6 +28,9 @@ public:
 
 	void init();
 	bool needsInit();
+	void setup();
+	
+	void recursiveVolumeBuild(VolumeCube C);
 
 	void setIsoValue(float value);
 	void increaseIsoValue(float value);
@@ -33,6 +41,9 @@ private:
 
 	// Vertex Buffer Object
 	GLuint cubeVerticesVBO;
+	GLuint cubeIndicesVBO;
+	
+	unsigned int mNumIndices;
 
 	// Frame Buffer Object
 	GLuint FBO;
@@ -64,10 +75,6 @@ private:
 	// Textures
 	GLuint colorTexture;
 
-	void createCube(float x, float y, float z);
-	GLuint createVolume();
-	void computeTransferFunction();
-
 	// FBO
 	GLuint setupFBO();
 	bool bindFBO(GLuint fbo_handle, GLuint *fbo_texture, int size);
@@ -85,6 +92,16 @@ private:
 
 	GLubyte* transfer;
 	float isoValue;
+
+	std::vector<VertexPositionColor> mVertices;
+
+	void createCube(float x, float y, float z);
+	GLuint createVolume();
+	void computeTransferFunction();
+
+	int sampleVolume(int x, int y, int z);
+	float sampleVolume3DWithTransfer(Eigen::Vector3f& min, Eigen::Vector3f& max);
+	void buildVertBuffer();
 
 	std::vector<TransferControlPoint*> colorKnots;
 	std::vector<TransferControlPoint*> alphaKnots;

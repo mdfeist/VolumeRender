@@ -13,11 +13,37 @@
 
 #include "TransferControlPoint.h"
 #include "Cubic.h"
+#include "VolumeCube.h"
 
 // All textures for the buffer are TEXTURE_SIZExTEXTURE_SIZE in dimensions
-#define TEXTURE_SIZE 1024
+#define TEXTURE_SIZE 512
 // Used to find the offset of variables in a structure (found when binding the VBO)
 #define MEMBER_OFFSET(s,m) ((char *)NULL + (offsetof(s,m)))
+
+const GLushort  NUM_BOX_INDICES = 36;			// Number of indices for a single box
+const GLushort  NUM_BOX_VERTICES = 8;			// Number of vertices for a single box
+const GLushort  NUM_BOX_TRIS = 12;				// Number of triangles for a single box
+GLushort  VolumeIndices[] =					// Array of indices for a single box
+{
+	// front
+    0, 1, 2,
+    2, 3, 0,
+    // top
+    3, 2, 6,
+    6, 7, 3,
+    // back
+    7, 6, 5,
+    5, 4, 7,
+    // bottom
+    4, 5, 1,
+    1, 0, 4,
+    // left
+    4, 0, 3,
+    3, 7, 4,
+    // right
+    1, 5, 6,
+    6, 2, 1,
+};
 
 struct float3 {										// A three dimensional float
 													// Variables for each dimension
@@ -46,7 +72,7 @@ struct float3 {										// A three dimensional float
 	}
 };
 
-struct Vertex										// Vertex used for creating VBO
+struct Vertex										// Vertex used for creating VBO (Includes Normals)
 {
     float3 m_Pos;									// Position of vertex
     float3 m_Color;									// Color of vertex
@@ -58,6 +84,19 @@ struct Vertex										// Vertex used for creating VBO
 		m_Pos = pos;								// Set the position
 		m_Color = pos;								// Set color to be the same as position
 		m_Normal = norm;							// Set normal
+	}
+};
+
+struct VertexPositionColor							// Vertex used for creating VBO (No Normals)
+{
+	float3 m_Pos;									// Position of vertex
+    float3 m_Color;									// Color of vertex
+
+	VertexPositionColor() {}							// Generic constructor
+
+	VertexPositionColor(float3 pos, float3 color) {	// Constructor with given values
+		m_Pos = pos;								// Set the position
+		m_Color = color;							// Set color to be the same as position
 	}
 };
 
@@ -196,7 +235,7 @@ Volume::~Volume(void)														// Destructor
 
 void Volume::init() {
 	FBO = setupFBO();
-	printf("FBO created\n");
+	printf("- FBO created\n");
 
 	front_facing = newTexture(TEXTURE_SIZE, TEXTURE_SIZE);
 	back_facing = newTexture(TEXTURE_SIZE, TEXTURE_SIZE);
@@ -204,7 +243,7 @@ void Volume::init() {
 	colorTexture = newTexture(TEXTURE_SIZE, TEXTURE_SIZE);
 
 	noiseTexture = createNoise();
-	printf("Textures created\n");
+	printf("- Textures created\n");
 
 	char shaderFirstPassFile[] = "shader/raycastDiffuse.cg";
 	if (setupCg(&context, &fProgramFirstPass, &fragmentProfile, shaderFirstPassFile)) {
@@ -222,7 +261,7 @@ void Volume::init() {
 
 	cgGLSetParameter1f(cgStepSize, 1.0f/780.0f);				// Set the incremental step size of the ray cast
 
-	char shaderSecondPassFile[] = "shader/diffuse.cg";
+	char shaderSecondPassFile[] = "shader/bicubic.cg";
 	if (setupCg(&context, &fProgramSecondPass, &fragmentProfile, shaderSecondPassFile)) {
 		fprintf(stderr, "Error: %s\n", "Initializing Cg");
 		CheckCgError();
@@ -230,14 +269,13 @@ void Volume::init() {
 
 	cgColorTexData = cgGetNamedParameter(fProgramSecondPass, "texData");
 
-	createCube(1.0f, 1.0f, 1.0f);
-	printf("Cube created\n");
+	//createCube(1.0f, 1.0f, 1.0f);
+	
+	buildVertBuffer();
+	printf("- VBO created\n");
 
 	volume_texture = createVolume();
-	printf("volume texture created\n");
-	
-	std::cout << "- Computing Transfer Function" << std::endl; 
-	computeTransferFunction();
+	printf("- Volume texture created\n");
 
 	/*
 	for (int i = 0; i < 256; i++) {
@@ -268,9 +306,21 @@ bool Volume::needsInit() {
 	return !initialized;
 }
 
+void Volume::setup() {
+	std::cout << "- Computing Transfer Function" << std::endl; 
+	computeTransferFunction();
+
+	std::cout << "- Recursively Building Cubes for Empty Space Leaping" << std::endl; 
+	VolumeCube C(0.f, 0.f, 0.f, 1.f, 1.f, 1.f);
+	recursiveVolumeBuild(C);
+	std::cout << "- Cubes Created" << std::endl; 
+}
+
 int Volume::loadRaw(char *directory) {
 	// reopen file, and read the data
-	FILE* dataFile = fopen(directory, "rb");
+	FILE* dataFile = NULL;
+	
+	fopen_s(&dataFile, directory, "rb");
 
 	if (dataFile) {
 		if (data != NULL) {
@@ -490,9 +540,8 @@ void Volume::computeTransferFunction() {
 	colorKnots.push_back( new TransferControlPoint(0.98f, 0.78f, 0.89f, 64) );	// Lung
 	colorKnots.push_back( new TransferControlPoint(0.98f, 0.78f, 0.89f, 70) );	// Lung
 	colorKnots.push_back( new TransferControlPoint(0.98f, 0.78f, 0.89f, 112) );	// Fat
-	colorKnots.push_back( new TransferControlPoint(0.98f, 0.78f, 0.89f, 126) );	// Fat
-	colorKnots.push_back( new TransferControlPoint(0.5f, .5f, 1.0f, 127) );		// Water
-	colorKnots.push_back( new TransferControlPoint(1.0f, 0.25f, 0.25f, 128) );	// Blood/Muscle
+	colorKnots.push_back( new TransferControlPoint(0.98f, 0.78f, 0.89f, 128) );	// Fat
+	colorKnots.push_back( new TransferControlPoint(1.0f, 0.25f, 0.25f, 129) );	// Blood/Muscle
 	colorKnots.push_back( new TransferControlPoint(1.0f, 0.25f, 0.25f, 132) );	// Blood/Muscle
 	colorKnots.push_back( new TransferControlPoint(0.5f, 0.25f, 0.25f, 133) );	// Liver
 	colorKnots.push_back( new TransferControlPoint(0.5f, 0.25f, 0.25f, 136) );	// Liver
@@ -505,10 +554,9 @@ void Volume::computeTransferFunction() {
 	alphaKnots.push_back( new TransferControlPoint(0.0f, 63) );		// Air
 	alphaKnots.push_back( new TransferControlPoint(0.05f, 64) );	// Lung
 	alphaKnots.push_back( new TransferControlPoint(0.02f, 70) );	// Lung
-	alphaKnots.push_back( new TransferControlPoint(0.5f, 112) );	// Fat
-	alphaKnots.push_back( new TransferControlPoint(0.2f, 126) );	// Fat
-	alphaKnots.push_back( new TransferControlPoint(0.0f, 127) );	// Water
-	alphaKnots.push_back( new TransferControlPoint(0.2f, 128) );	// Blood/Muscle
+	alphaKnots.push_back( new TransferControlPoint(0.8f, 112) );	// Fat
+	alphaKnots.push_back( new TransferControlPoint(0.7f, 128) );	// Fat
+	alphaKnots.push_back( new TransferControlPoint(0.2f, 129) );	// Blood/Muscle
 	alphaKnots.push_back( new TransferControlPoint(0.05f, 132) );	// Blood/Muscle
 	alphaKnots.push_back( new TransferControlPoint(0.3f, 133) );	// Liver
 	alphaKnots.push_back( new TransferControlPoint(0.1f, 136) );	// Liver
@@ -635,6 +683,170 @@ void Volume::createCube(float x, float y, float z) {
 	glBindBufferARB( GL_ARRAY_BUFFER_ARB, 0 );					// Unbind VBO buffer
 }
 
+int Volume::sampleVolume(int x, int y, int z)
+{
+	x = (int)clamp(x, 0, volumeWidth - 1);
+	y = (int)clamp(y, 0, volumeHeight - 1);
+	z = (int)clamp(z, 0, volumeDepth - 1);
+
+	return (int)data[x + (y * volumeWidth) + (z * volumeWidth * volumeHeight)];
+}
+
+float Volume::sampleVolume3DWithTransfer(Eigen::Vector3f& min, Eigen::Vector3f& max)
+{
+	float result = 0.0f;
+
+	for (int x = (int)floorf(min.x()); x <= (int)ceilf(max.x()); x++)
+	{
+		for (int y = (int)floorf(min.y()); y <= (int)ceilf(max.y()); y++)
+		{
+			for (int z = (int)floorf(min.z()); z <= (int)ceilf(max.z()); z++)
+			{
+				//sample the volume to get the iso value
+				int isovalue = sampleVolume(x, y, z);
+
+				//accumulate the opacity from the transfer function
+				result += (float)transfer[4*isovalue + 3];
+			}
+		}
+	}
+
+	return result;
+}
+
+void Volume::recursiveVolumeBuild(VolumeCube C)
+{
+	//stop when the current cube is 1/10 of the original volume
+	if (C.Width <= 0.1f)
+	{
+		//add the min/max vertex to the list
+		Eigen::Vector3f min = Eigen::Vector3f(C.X, C.Y, C.Z);
+		Eigen::Vector3f max = Eigen::Vector3f(C.X + C.Width, C.Y + C.Height, C.Z + C.Depth);
+		Eigen::Vector3f min_pi = Eigen::Vector3f(
+			C.X * volumeWidth,
+			C.Y * volumeHeight,
+			C.Z * volumeDepth);
+		Eigen::Vector3f max_pi = Eigen::Vector3f(
+			(C.X + C.Width) * volumeWidth,
+			(C.Y + C.Height) * volumeHeight,
+			(C.Z + C.Depth) * volumeDepth);
+
+		//additively sample the transfer function and check if there are any
+		//samples that are greater than zero
+		float opacity = sampleVolume3DWithTransfer(min_pi, max_pi);
+
+		if (opacity > 0.0f)
+		{
+
+			float3 pos1(min.x(), min.y(), max.z());
+			float3 pos2(max.x(), min.y(), max.z());
+			float3 pos3(max.x(), max.y(), max.z());
+			float3 pos4(min.x(), max.y(), max.z());
+			float3 pos5(min.x(), min.y(), min.z());
+			float3 pos6(max.x(), min.y(), min.z());
+			float3 pos7(max.x(), max.y(), min.z());
+			float3 pos8(min.x(), max.y(), min.z());
+
+			VertexPositionColor v1(pos1, pos1);
+			VertexPositionColor v2(pos2, pos2);
+			VertexPositionColor v3(pos3, pos3);
+			VertexPositionColor v4(pos4, pos4);
+			VertexPositionColor v5(pos5, pos5);
+			VertexPositionColor v6(pos6, pos6);
+			VertexPositionColor v7(pos7, pos7);
+			VertexPositionColor v8(pos8, pos8);
+
+			mVertices.push_back(v1);
+			mVertices.push_back(v2);
+			mVertices.push_back(v3);
+			mVertices.push_back(v4);
+			mVertices.push_back(v5);
+			mVertices.push_back(v6);
+			mVertices.push_back(v7);
+			mVertices.push_back(v8);
+		}
+		return;
+	}
+
+	float newWidth = C.Width / 2.f;
+	float newHeight = C.Height / 2.f;
+	float newDepth = C.Depth / 2.f;
+
+	///  SubGrid        r | c | d
+	///  Front:
+	///  Top-Left    :  0   0   0
+	///  Top-Right   :  0   1   0
+	///  Bottom-Left :  1   0   0
+	///  Bottom-Right:  1   1   0
+	///  Back:
+	///  Top-Left    :  0   0   1
+	///  Top-Right   :  0   1   1
+	///  Bottom-Left :  1   0   1
+	///  Bottom-Right:  1   1   1
+	for (float r = 0; r < 2; r++)
+	{
+		for (float c = 0; c < 2; c++)
+		{
+			for (float d = 0; d < 2; d++)
+			{
+				VolumeCube cube = VolumeCube(C.Left() + c * (newWidth),
+					C.Top() + r * (newHeight),
+					C.Front() + d * (newDepth),
+					newWidth,
+					newHeight,
+					newDepth);
+
+				recursiveVolumeBuild(cube);
+			}
+		}
+	}
+}
+
+void Volume::buildVertBuffer()
+{
+	VertexPositionColor* data = new VertexPositionColor[mVertices.size()];
+	std::copy(mVertices.begin(), mVertices.end(), data);
+	unsigned int mNumBoxes = (mVertices.size() / 8);
+	unsigned int mNumVertices = mVertices.size();
+	unsigned int mNumTris = mNumBoxes * NUM_BOX_TRIS;
+
+	mNumIndices = mNumBoxes * NUM_BOX_INDICES;
+
+	//we are handling the adding vertex condition
+	GLuint* indices = new GLuint [mNumIndices];
+	for (int copyIndex = 0; copyIndex < mNumBoxes; copyIndex++)
+	{
+		for (int index = 0; index < NUM_BOX_INDICES; index++)
+		{
+			indices[copyIndex * NUM_BOX_INDICES + index] = (GLuint)(VolumeIndices[index] + (copyIndex) * NUM_BOX_VERTICES);
+		}
+	}
+
+	// Create VBO for vertices
+	glGenBuffersARB( 1, &cubeVerticesVBO );							// Create VBO
+
+	glBindBufferARB( GL_ARRAY_BUFFER_ARB, cubeVerticesVBO );		// Bind VBO buffer
+	glBufferDataARB( GL_ARRAY_BUFFER_ARB,							// Copy the vertex data to the VBO
+		mNumVertices * sizeof(VertexPositionColor),					// Get the size of data
+		&data[0],													// Give the data for the vertices
+		GL_STATIC_DRAW_ARB );										// Tell the buffer that the data is not going to change
+	
+	glBindBufferARB( GL_ARRAY_BUFFER_ARB, 0 );						// Unbind VBO buffer
+	
+	// Create VBO for indices
+	glGenBuffersARB( 1, &cubeIndicesVBO );							// Create buffer
+
+	glBindBufferARB( GL_ELEMENT_ARRAY_BUFFER_ARB, cubeIndicesVBO );	// Bind buffer
+	glBufferDataARB( GL_ELEMENT_ARRAY_BUFFER_ARB,					// Copy the indices data to the buffer
+		mNumIndices * sizeof(GLuint),								// Get the size of indices
+		&indices[0],												// Give the data for the indices
+		GL_STATIC_DRAW_ARB );										// Tell the buffer that the data is not going to change
+
+	glBindBufferARB( GL_ELEMENT_ARRAY_BUFFER_ARB, 0 );				// Unbind buffer
+
+	delete[] indices;
+}
+
 void Volume::unbindFBO() {
 	// 'unbind' the FBO. things will now be drawn to screen as usual
 	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
@@ -674,7 +886,7 @@ GLuint Volume::setupFBO() {													// Create a new frame buffer for off scr
 bool Volume::bindFBO(GLuint fbo_handle, GLuint *fbo_texture, GLsizei size) {	// Bind frame buffer and attach textures for rendering
 	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_handle);						// Bind frame buffer
 
-	if (size > GL_MAX_COLOR_ATTACHMENTS)
+	if (size > GL_MAX_COLOR_ATTACHMENTS)										// Limit number of color attachments to the GL_MAX_COLOR_ATTACHMENTS
 		size = GL_MAX_COLOR_ATTACHMENTS;
 
 	for (int i = 0; i < size; i++)
@@ -771,9 +983,9 @@ void Volume::increaseIsoValue(float value) {
 }
 
 void Volume::render(Camera* camera) {
-	int width = camera->getWidth();
-	int height = camera->getHeight();
-
+	int width = camera->getWidth();							// Get Camera Width
+	int height = camera->getHeight();						// Get Camera Height
+	
 	glViewport(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);			// Set Viewport
 	glMatrixMode(GL_PROJECTION);							// Update projection
 	glPushMatrix();
@@ -783,15 +995,18 @@ void Volume::render(Camera* camera) {
 		camera->getNearClipping(),							// Set near clipping
 		camera->getFarClipping());							// Set far clipping
 	glMatrixMode(GL_MODELVIEW);								// Change back to model view mode
+	
 	glPushMatrix();											// set where to start the current object
-
-	glScalef(
-		1.0f, 
-		(spacingY/spacingX)*((float)volumeHeight/volumeWidth), 
-		(spacingZ/spacingX)*((float)volumeDepth/volumeWidth));
-
+	
+	glScalef(												// Scale Volume to proper proportions
+		1.0f,												// Scale width (Always 1.0f)
+		(spacingY/spacingX)*								// Scale the voxel spacing height relative to spacing width
+			((float)volumeHeight/volumeWidth),				// Scale the height dimension relative to the width
+		(spacingZ/spacingX)*								// Scale the voxel spacing depth relative to spacing width
+			((float)volumeDepth/volumeWidth));				// Scale the depth dimension relative to the width
+			
 	//glScalef(2.f, 2.f, 2.f);
-	glScalef(1.5f, 1.5f, 1.5f);
+	glScalef(1.5f, 1.5f, 1.5f);								// Scale the volume
 
 	glTranslatef(position.x(), position.y(), position.z());	// set position of the texture cube
 
@@ -807,53 +1022,66 @@ void Volume::render(Camera* camera) {
 	float angle = (acos(rotation.w())*2.0f)*(180.f/M_PI);	// Get rotation angle
 
 	glRotatef(angle, x, y, z);								// set rotation of the texture cube
-
+	
 	glTranslatef(-0.5, -0.5, -0.5);							// center the texture cube
+
+	// Bind the vertices's VBO
+	glBindBufferARB( GL_ARRAY_BUFFER_ARB, cubeVerticesVBO );
+	glVertexPointer( 3, GL_FLOAT, sizeof(VertexPositionColor), MEMBER_OFFSET(VertexPositionColor,m_Pos) );
+	glColorPointer( 3, GL_FLOAT, sizeof(VertexPositionColor), MEMBER_OFFSET(VertexPositionColor,m_Color) );
 
 	// We need to enable the client stats for the vertex attributes we want 
 	// to render even if we are not using client-side vertex arrays.
 	glEnableClientState(GL_VERTEX_ARRAY);
 	glEnableClientState(GL_COLOR_ARRAY);
-	glEnableClientState(GL_NORMAL_ARRAY);
+	glEnableClientState(GL_INDEX_ARRAY);
 
-	// Bind the vertices's VBO
-	glBindBufferARB( GL_ARRAY_BUFFER_ARB, cubeVerticesVBO );
-	glVertexPointer( 3, GL_FLOAT, sizeof(Vertex), MEMBER_OFFSET(Vertex,m_Pos) );
-	glColorPointer( 3, GL_FLOAT, sizeof(Vertex), MEMBER_OFFSET(Vertex,m_Color) );
-	glNormalPointer( GL_FLOAT, sizeof(Vertex), MEMBER_OFFSET(Vertex,m_Normal) );
-	
-	glEnable(GL_TEXTURE_2D);							// Enable 2D textures
-	
-	bindFBO(FBO, &front_facing, 1);						// Render to our frame buffer using the front_facing texture
-	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);	// Clear color and depth buffer's
+	// Bind the indices VBO
+	glBindBufferARB( GL_ELEMENT_ARRAY_BUFFER_ARB, cubeIndicesVBO );
 
-	glEnable(GL_CULL_FACE);								// Enable the ability to remove face's
-	glCullFace(GL_BACK);								// Remove back facing face's
-	glDrawArrays( GL_QUADS, 0, 24 );					// Render Front Facing
-	glDisable(GL_CULL_FACE);							// Disable the ability to remove face's
-
-	glBindFramebuffer(GL_FRAMEBUFFER, 0);				// Unbind frame buffer
+	glEnable( GL_TEXTURE_2D );							// Enable 2D textures
 	
 	bindFBO(FBO, &back_facing,  1);						// Render to our frame buffer using the back_facing texture
+
+	glClearDepth(0.0f);									// Depth Buffer Setup
+	glDepthFunc(GL_GREATER);							// The Type Of Depth Testing To Do
+
 	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);	// Clear color and depth buffer's
 
 	glEnable(GL_CULL_FACE);								// Enable the ability to remove face's
 	glCullFace(GL_FRONT);								// Remove front facing face's
-	glDrawArrays( GL_QUADS, 0, 24 );					// Render Back Facing
+	glDrawElements(	GL_TRIANGLES,						// Render Back Facing
+		mNumIndices, GL_UNSIGNED_INT, 0);
+	glDisable(GL_CULL_FACE);							// Disable the ability to remove face's
+	
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);				// Unbind frame buffer
+
+	bindFBO(FBO, &front_facing, 1);						// Render to our frame buffer using the front_facing texture
+	
+	glClearDepth(1.0f);									// Depth Buffer Setup
+	glDepthFunc(GL_LEQUAL);								// The Type Of Depth Testing To Do
+
+	glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);	// Clear color and depth buffer's
+
+	glEnable(GL_CULL_FACE);								// Enable the ability to remove face's
+	glCullFace(GL_BACK);								// Remove back facing face's
+	glDrawElements(	GL_TRIANGLES,						// Render Front Facing
+		mNumIndices, GL_UNSIGNED_INT, 0);				
 	glDisable(GL_CULL_FACE);							// Disable the ability to remove face's
 	
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);				// Unbind frame buffer
 
 	// Unbind buffers so client-side vertex arrays still work.
 	glBindBufferARB( GL_ARRAY_BUFFER_ARB, 0 );
+	glBindBufferARB( GL_ELEMENT_ARRAY_BUFFER_ARB, 0 );
 
 	// Disable the client side arrays again.
 	glDisableClientState(GL_VERTEX_ARRAY);
-	glDisableClientState(GL_COLOR_ARRAY);
-	glDisableClientState(GL_NORMAL_ARRAY);
+	glDisableClientState(GL_COLOR_ARRAY);;
+	glDisableClientState(GL_INDEX_ARRAY);
 
 	glPopMatrix();												// Restore state
-	
+
 	// First Pass Render Volume
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
@@ -908,7 +1136,7 @@ void Volume::render(Camera* camera) {
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);						// Unbind frame buffer
 	
 	glPopMatrix();												// end the current object transformations
-
+	
 	// Second Pass Render Volume
 	glViewport(0, 0, width, height);
 	glMatrixMode(GL_PROJECTION);
@@ -923,6 +1151,8 @@ void Volume::render(Camera* camera) {
 	CheckCgError();
 
 	// enable Cg shader and texture (a 'compute' fragment program)
+	//cgGLSetTextureParameter(cgColorTexData, front_facing);
+	//cgGLSetTextureParameter(cgColorTexData, back_facing);
 	cgGLSetTextureParameter(cgColorTexData, colorTexture);		// Bind color render to cgColorTexData
 	cgGLEnableTextureParameter(cgColorTexData);					// Enable cgColorTexData
 
@@ -951,5 +1181,6 @@ void Volume::render(Camera* camera) {
 	glMatrixMode(GL_PROJECTION);
 	glPopMatrix();
 	glMatrixMode(GL_MODELVIEW);
-	glPopMatrix(); //end the current object transformations
+	glPopMatrix();												//end the current object transformations
+	
 }
