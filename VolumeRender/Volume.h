@@ -56,7 +56,6 @@ private:
 	CGprogram	fProgramFirstPass;
 	CGparameter cgFrontTexData;
 	CGparameter cgBackTexData;
-	CGparameter cgNoiseTexData;
 	CGparameter cgVolumeTexData;
 	CGparameter cgTransferTexData;
 	CGparameter cgStepSize;
@@ -66,7 +65,6 @@ private:
 	GLuint back_facing;
 	GLuint volume_texture;
 	GLuint transferTexture;
-	GLuint noiseTexture;
 	GLuint depthrenderbuffer;
 
 	// Second Pass

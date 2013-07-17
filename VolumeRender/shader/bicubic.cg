@@ -93,8 +93,7 @@ void main(float2  texCoord : TEXCOORD0,
 	  uniform sampler2D texData,
 	  out float4 color0 : COLOR0)
 {	
-/*
-	float2 stepxy = float2(1.0/512.f, 1.0/512.f);
+	float2 stepxy = float2(1.0/1024.f, 1.0/1024.f);
 	float2 pos = texCoord.xy + stepxy * 0.5;
 	float2 f = frac(pos / stepxy);
 
@@ -112,7 +111,6 @@ void main(float2  texCoord : TEXCOORD0,
                       line_run(xystart.y + stepxy.y      , xpos, linetaps, texData) * columntaps.g +
                       line_run(xystart.y + stepxy.y * 2.0, xpos, linetaps, texData) * columntaps.b +
                       line_run(xystart.y + stepxy.y * 3.0, xpos, linetaps, texData) * columntaps.a,1);
-					  */
 
-	color0 = tex2D(texData, texCoord);
+	//color0 = tex2D(texData, texCoord);
 }	

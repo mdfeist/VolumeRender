@@ -1,16 +1,12 @@
 void main(float2  texCoord : TEXCOORD0,
 	  uniform sampler2D frontTexData,
 	  uniform sampler2D backTexData,
-	  uniform sampler2D noiseTexData,
 	  uniform sampler3D VolumeS,
 	  uniform sampler1D TransferS,
 	  uniform float stepSize,
 	  uniform float isoValue,
 	  out float4 color0 : COLOR0)
 {	
-
-	//float2 jitter = float2(tex2D(noiseTexData, texCoord).r - 0.5, tex2D(noiseTexData, float2(1.0 - texCoord.x, texCoord.y)).r - 0.5) / 512.f;
-	//float3 front = tex2D(frontTexData, texCoord + jitter).xyz;
 	float3 front = tex2D(frontTexData, texCoord).xyz;
     float3 back = tex2D(backTexData, texCoord).xyz;
 	float3 dir = normalize(back - front);
