@@ -165,9 +165,9 @@ void Renderer::render() {								// Render the scene
 			a->init();									// Setup actor
 		else {
 			if (keys[VK_UP])
-				((Volume*)a)->increaseIsoValue(0.02f);
+				((Volume*)a)->increaseIsoValue(0.005f);
 			else if (keys[VK_DOWN])
-				((Volume*)a)->increaseIsoValue(-0.02f);
+				((Volume*)a)->increaseIsoValue(-0.005f);
 
 			a->render(camera);							// Render actor
 		}

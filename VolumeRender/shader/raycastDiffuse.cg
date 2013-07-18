@@ -9,61 +9,64 @@ void main(float2  texCoord : TEXCOORD0,
 {	
 	float3 front = tex2D(frontTexData, texCoord).xyz;
     float3 back = tex2D(backTexData, texCoord).xyz;
-	float3 dir = normalize(back - front);
-	float dir_length = length(dir.xyz) + 8.f*stepSize;
-	float3 step = dir * stepSize;
+	float3 dir = back - front;
+	float dir_length = length(dir.xyz);
 
 	float4 dst = float4(0, 0, 0, 0);
-	float3 pos = front;
 
-	float4 pos_color = float4(0, 0, 0, 0);
-	float4 src = 0;
-	float length_acc = 0;
+	if (dir_length > 0.f) {
+		float3 step = normalize(dir) * stepSize;
+	
+		float3 pos = front;
+	
+		float4 src = 0;
+		float length_acc = 0;
 
-	float4 value = 0;
+		float4 value = 0;
 
-	for(int i = 0; i < 2048; i++)
-	{
-		value = tex3D(VolumeS, pos);
-		
-		if (value.r >= isoValue) 
+		for(int i = 0; i < 2048; i++)
 		{
-			src = tex1D(TransferS, value.r);
+			value = tex3D(VolumeS, pos);
+		
+			if (value.r >= isoValue) 
+			{
+				src = tex1D(TransferS, value.r);
 
-			src.rgb *= src.a;
-			dst = (1.0f - dst.a)*src + dst;
+				src.rgb *= src.a;
+				dst = (1.0f - dst.a)*src + dst;
 			
-			//break from the loop when alpha gets high enough
-			if(dst.a >= .95f) 
+				//break from the loop when alpha gets high enough
+				if(dst.a >= .95f) 
+					break;
+			}
+
+			pos += step;
+
+			length_acc += stepSize;
+
+			if(length_acc >= dir_length)
 				break;
 		}
 
-		pos += step;
-
-		length_acc += stepSize;
-
-		if(length_acc >= dir_length)
-			break;
-	}
-
-	const float3 L = normalize(float3(0, 1, 1));
+		const float3 L = normalize(float3(0, 1, 1));
 	
-	const float DELTA = 0.001;
-	float3 sample1; float3 sample2; 
-	sample1.x = tex3D(VolumeS, pos - float3(DELTA, 0, 0)).x;
-	sample2.x = tex3D(VolumeS, pos + float3(DELTA, 0, 0)).x;
-	sample1.y = tex3D(VolumeS, pos - float3(0, DELTA, 0)).x;
-	sample2.y = tex3D(VolumeS, pos + float3(0, DELTA, 0)).x;
-	sample1.z = tex3D(VolumeS, pos - float3(0, 0, DELTA)).x;
-	sample2.z = tex3D(VolumeS, pos + float3(0, 0, DELTA)).x;
+		const float DELTA = 0.001;
+		float3 sample1; float3 sample2; 
+		sample1.x = tex3D(VolumeS, pos - float3(DELTA, 0, 0)).x;
+		sample2.x = tex3D(VolumeS, pos + float3(DELTA, 0, 0)).x;
+		sample1.y = tex3D(VolumeS, pos - float3(0, DELTA, 0)).x;
+		sample2.y = tex3D(VolumeS, pos + float3(0, DELTA, 0)).x;
+		sample1.z = tex3D(VolumeS, pos - float3(0, 0, DELTA)).x;
+		sample2.z = tex3D(VolumeS, pos + float3(0, 0, DELTA)).x;
 
-	float3 N = normalize(sample2 - sample1);
+		float3 N = normalize(sample2 - sample1);
 
-	float s = dot(N, L);
-	s *= 0.5;
+		float s = dot(N, L);
+		s *= 0.5;
 
-	//diffuse shading + fake ambient lighting
-	dst.rgb = s * dst.rgb + .5f * dst.rgb;
+		//diffuse shading + fake ambient lighting
+		dst.rgb = s * dst.rgb + .5f * dst.rgb;
+	}
 
 	color0 = dst;
 }	

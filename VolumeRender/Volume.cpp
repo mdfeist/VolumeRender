@@ -18,10 +18,11 @@
 
 #include "BuildCubesManager.h"
 
+// Minimum size of each sub cube of the Empty Space Leaping algorithm
 #define EMPTY_SPACE_SIZE 0.05f
 // All textures for the buffer are TEXTURE_WIDTHxTEXTURE_HEIGHT in dimensions
-#define RES_480p 1
-#define RES_720p 0
+#define RES_480p 0
+#define RES_720p 1
 
 #if RES_720p || RES_480p
 #if RES_720p
@@ -35,25 +36,15 @@
 #define TEXTURE_WIDTH 256
 #define TEXTURE_HEIGHT 256
 #endif
+
 // Used to find the offset of variables in a structure (found when binding the VBO)
 #define MEMBER_OFFSET(s,m) ((char *)NULL + (offsetof(s,m)))
-
-const GLushort  NUM_BOX_INDICES = 36;			// Number of indices for a single box
-const GLushort  NUM_BOX_VERTICES = 8;			// Number of vertices for a single box
-const GLushort  NUM_BOX_TRIS = 12;				// Number of triangles for a single box
-
-GLushort  VolumeIndicesFront[] = { 4, 5, 1, 1, 0, 4, };
-GLushort  VolumeIndicesTop[] = { 0, 1, 2, 2, 3, 0, };
-GLushort  VolumeIndicesBack[] = { 3, 2, 6, 6, 7, 3, };
-GLushort  VolumeIndicesBottom[] = { 7, 6, 5, 5, 4, 7, };
-GLushort  VolumeIndicesLeft[] = { 4, 0, 3, 3, 7, 4, };
-GLushort  VolumeIndicesRight[] = { 1, 5, 6, 6, 2, 1, };
 
 float length(float3 p) {							// Get the length of a float3
 	return sqrtf(p.x*p.x + p.y*p.y + p.z*p.z);
 }
 
-inline int clamp(int x, int a, int b) {
+inline int clamp(int x, int a, int b) {				// Clamp so x is between a and b inclusively
 	if (x < a)
 		x = a;
 	if (x > b)
@@ -118,20 +109,20 @@ GLuint newTexture(int width, int height) {
 
 Volume::Volume(void) : Actor()												// Constructor
 {
-	data = NULL;
-	transfer = NULL;
+	data = NULL;															// Set the volume data to NULL
+	transfer = NULL;														// Set the transfer function to NULL
 
 	cubeVerticesVBO = 0;													// Set cubeVerticesVBO to NULL
 	initialized = false;													// Set initialized to false
 
-	position = Eigen::Vector3f(0, 0, 0);
-	rotation = Eigen::Quaternionf::Identity();
+	position = Eigen::Vector3f(0, 0, 0);									// Set position to the origin
+	rotation = Eigen::Quaternionf::Identity();								// Set rotation to the identity
 
-	isoValue = 0.0f;
+	isoValue = 0.0f;														// Set the iso value threshold to 0
 
-	spacingX = 1.f;
-	spacingY = 1.f;
-	spacingZ = 1.f;
+	spacingX = 1.f;															// By default there is no spacing
+	spacingY = 1.f;															// And all the dimensions of the
+	spacingZ = 1.f;															// voxels are the same
 }
 
 
@@ -144,22 +135,23 @@ Volume::~Volume(void)														// Destructor
 	}
 }
 
-void Volume::init() {
-	FBO = setupFBO();
+void Volume::init() {														// Initialize OpenGL properties
+	FBO = setupFBO();														// Create Frame Buffer Object
 	printf("- FBO created\n");
 
-	front_facing = newTexture(TEXTURE_WIDTH, TEXTURE_HEIGHT);
-	back_facing = newTexture(TEXTURE_WIDTH, TEXTURE_HEIGHT);
+	front_facing = newTexture(TEXTURE_WIDTH, TEXTURE_HEIGHT);				// Create the texture to hold the render of the front faces
+	back_facing = newTexture(TEXTURE_WIDTH, TEXTURE_HEIGHT);				// Create the texture to hold the render of the back faces
 
-	colorTexture = newTexture(TEXTURE_WIDTH, TEXTURE_HEIGHT);
+	colorTexture = newTexture(TEXTURE_WIDTH, TEXTURE_HEIGHT);				// Create the texture to hold the final render
 	printf("- Textures created\n");
 
-	char shaderFirstPassFile[] = "shader/raycastDiffuse.cg";
-	if (setupCg(&context, &fProgramFirstPass, &fragmentProfile, shaderFirstPassFile)) {
-		fprintf(stderr, "Error: %s\n", "Initializing Cg");
+	char shaderFirstPassFile[] = "shader/raycastDiffuse.cg";				// Get the path to the ray casting shader
+	if (setupCg(&context, &fProgramFirstPass, &fragmentProfile,				// Load shader
+		shaderFirstPassFile)) { 
+		fprintf(stderr, "Error: %s\n", "Initializing Cg");					// Give message if load failed
 		CheckCgError();
 	}
-
+																			// Find and bind the shaders parameter
 	cgFrontTexData = cgGetNamedParameter(fProgramFirstPass, "frontTexData");
 	cgBackTexData = cgGetNamedParameter(fProgramFirstPass, "backTexData");
 	cgVolumeTexData = cgGetNamedParameter(fProgramFirstPass, "VolumeS");
@@ -167,69 +159,65 @@ void Volume::init() {
 	cgStepSize = cgGetNamedParameter(fProgramFirstPass, "stepSize");
 	cgisoValue = cgGetNamedParameter(fProgramFirstPass, "isoValue");
 
-	cgGLSetParameter1f(cgStepSize, 1.0f/780.0f);				// Set the incremental step size of the ray cast
+	cgGLSetParameter1f(cgStepSize, 1.0f/780.0f);							// Set the incremental step size of the ray cast
 
-	char shaderSecondPassFile[] = "shader/bicubic.cg";
-	if (setupCg(&context, &fProgramSecondPass, &fragmentProfile, shaderSecondPassFile)) {
-		fprintf(stderr, "Error: %s\n", "Initializing Cg");
+	char shaderSecondPassFile[] = "shader/bicubic.cg";						// Get the path to the post render shader
+	if (setupCg(&context, &fProgramSecondPass, &fragmentProfile,			// Load shader
+		shaderSecondPassFile)) {
+		fprintf(stderr, "Error: %s\n", "Initializing Cg");					// Give message if load failed
 		CheckCgError();
 	}
-
+																			// Find and bind the shaders parameter
 	cgColorTexData = cgGetNamedParameter(fProgramSecondPass, "texData");
-
-	//createCube(1.0f, 1.0f, 1.0f);
 	
-	buildVertBuffer();
-	printf("- VBO created\n");
+	buildVertBuffer();														// Create Vertex Buffer Objects
+	printf("- VBO created\n");												// Used to store the volume cubes in GPU memory
 
-	volume_texture = createVolume();
+	volume_texture = createVolume();										// Load the volume into GPU memory
 	printf("- Volume texture created\n");
 
-	/*
-	for (int i = 0; i < 256; i++) {
-		printf("%3d	\t%3d %3d %3d %3d\n", 
-			i, 
-			transfer[4*i + 0],
-			transfer[4*i + 1],
-			transfer[4*i + 2],
-			transfer[4*i + 3]);
-	}
-	*/
-	glGenTextures(1, &transferTexture);
-	glBindTexture(GL_TEXTURE_1D, transferTexture);
-	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-	glTexParameterf(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, transfer);
+	glGenTextures(1, &transferTexture);										// Create 1D texture for transfer function
+	glBindTexture(GL_TEXTURE_1D, transferTexture);							// Bind texture
+	glTexParameterf(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);	// Clamp texture to boarder
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);		// During texture look up grab the nearest value
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);		// During texture look up grab the nearest value
+	glTexImage1D(															// Create texture
+		GL_TEXTURE_1D,														// Texture is 1D
+		0,																	// Use base level of detail															
+		GL_RGBA,															// Use internal format GL_RGBA
+		256,																// Set width
+		0,																	// Set boarder to 0
+		GL_RGBA,															// Use format GL_RGBA
+		GL_UNSIGNED_BYTE,													// Use type GL_UNSIGNED_BYTES
+		transfer);															// Copy transfer function data to GPU
 
-	errcheck();
+	errcheck();																// Check for OpenGL errors
 
-	free(transfer);
+	free(transfer);															// Release transfer since it's now on the GPU
 
-	initialized = true;
+	initialized = true;														// Set initialized flag to true
 }
 
-bool Volume::needsInit() {
+bool Volume::needsInit() {													// Check if volume was initialized
 	return !initialized;
 }
 
-void Volume::setup() {
+void Volume::setup() {														// Pre-compute volume properties 
 	std::cout << "- Computing Transfer Function" << std::endl; 
-	computeTransferFunction();
+	computeTransferFunction();												// Create the transfer function
 
-	std::cout << "- Recursively Building Cubes for Empty Space Leaping" << std::endl; 
-	VolumeCube C(0.f, 0.f, 0.f, 1.f, 1.f, 1.f);
-	recursiveVolumeBuild(C);
+	std::cout << 
+		"- Recursively Building Cubes for Empty Space Leaping" 
+		<< std::endl; 
+	VolumeCube C(0.f, 0.f, 0.f, 1.f, 1.f, 1.f);								// Define cube
+	recursiveVolumeBuild(C);												// Recursively divided cube and remove empty space
 	std::cout << "- Adding Vertices for Cubes" << std::endl; 
-	buildCubes();
+	buildCubes();															// Build the vertex buffer object for all the sub cubes
 	std::cout << "- Cubes Created" << std::endl;
 }
 
-int Volume::loadRaw(char *directory) {
-	// reopen file, and read the data
+int Volume::loadRaw(char *directory) {										// Loads raw volume data from a file
 	FILE* dataFile = NULL;
-	
 	fopen_s(&dataFile, directory, "rb");
 
 	if (dataFile) {
@@ -433,18 +421,6 @@ GLuint Volume::createVolume() {
 }
 
 void Volume::computeTransferFunction() {
-	// Test spline CT_BONE
-	/*
-	 colorFun->AddRGBPoint( -3024, 0, 0, 0, 0.5, 0.0 );
-      colorFun->AddRGBPoint( -16, 0.73, 0.25, 0.30, 0.49, .61 );
-      colorFun->AddRGBPoint( 641, .90, .82, .56, .5, 0.0 );
-      colorFun->AddRGBPoint( 3071, 1, 1, 1, .5, 0.0 );
-      
-      opacityFun->AddPoint(-3024, 0, 0.5, 0.0 );
-      opacityFun->AddPoint(-16, 0, .49, .61 );
-      opacityFun->AddPoint(641, .72, .5, 0.0 );
-      opacityFun->AddPoint(3071, .71, 0.5, 0.0);
-	  */
 	colorKnots.push_back( new TransferControlPoint(0.f, 0.f, 0.f, 0) );			// Air
 	colorKnots.push_back( new TransferControlPoint(0.f, 0.f, 0.f, 63) );		// Air
 	colorKnots.push_back( new TransferControlPoint(0.98f, 0.78f, 0.89f, 64) );	// Lung
@@ -649,129 +625,6 @@ void Volume::buildCubes() {
 	manager.setup(&mCubes, &mVertices, &mIndices);
 	manager.buildCubes();
 
-	/*
-	for (unsigned int i = 0; i < mCubes.size(); i++) {
-		Eigen::Vector3f center = Eigen::Vector3f(
-			mCubes[i].X + mCubes[i].Width/2.f, 
-			mCubes[i].Y + mCubes[i].Height/2.f, 
-			mCubes[i].Z + mCubes[i].Depth/2.f);
-
-		int inside = 0;
-		bool addFace[6];
-		memset(addFace, true, 6);
-
-		Eigen::Vector3f points[6];
-
-		points[0] = center + Eigen::Vector3f(mCubes[i].Width, 0.f, 0.f);
-		points[1] = center - Eigen::Vector3f(mCubes[i].Width, 0.f, 0.f);
-		points[2] = center + Eigen::Vector3f(0.f, mCubes[i].Height, 0.f);
-		points[3] = center - Eigen::Vector3f(0.f, mCubes[i].Height, 0.f);
-		points[4] = center + Eigen::Vector3f(0.f, 0.f, mCubes[i].Depth);
-		points[5] = center - Eigen::Vector3f(0.f, 0.f, mCubes[i].Depth);
-
-		for (unsigned int k = 0; k < mCubes.size(); k++) {
-			//add the min/max vertex to the list
-			Eigen::Vector3f t_min = Eigen::Vector3f(
-				mCubes[k].X, 
-				mCubes[k].Y,
-				mCubes[k].Z);
-			Eigen::Vector3f t_max = Eigen::Vector3f(
-				mCubes[k].X + mCubes[k].Width, 
-				mCubes[k].Y + mCubes[k].Height, 
-				mCubes[k].Z + mCubes[k].Depth);
-
-			for (unsigned int p = 0; p < 6; p++) {
-				if (points[p].x() > t_min.x() &&
-					points[p].y() > t_min.y() &&
-					points[p].z() > t_min.z() &&
-					points[p].x() < t_max.x() &&
-					points[p].y() < t_max.y() &&
-					points[p].z() < t_max.z()) {
-						addFace[p] = false;
-						inside++;
-				}
-			}
-
-			if (inside >= 6)
-				break;
-		}
-
-		if (inside < 6) {
-			//add the min/max vertex to the list
-			Eigen::Vector3f min = Eigen::Vector3f(
-				mCubes[i].X, 
-				mCubes[i].Y,
-				mCubes[i].Z);
-			Eigen::Vector3f max = Eigen::Vector3f(
-				mCubes[i].X + mCubes[i].Width, 
-				mCubes[i].Y + mCubes[i].Height, 
-				mCubes[i].Z + mCubes[i].Depth);
-
-			// Create Vertices
-			float3 verts[8] = {
-				float3(min.x(), min.y(), max.z()),
-				float3(max.x(), min.y(), max.z()),
-				float3(max.x(), max.y(), max.z()),
-				float3(min.x(), max.y(), max.z()),
-				float3(min.x(), min.y(), min.z()),
-				float3(max.x(), min.y(), min.z()),
-				float3(max.x(), max.y(), min.z()),
-				float3(min.x(), max.y(), min.z()),
-			};
-			
-			// Add Indices
-			unsigned int startIndex = mVertices.size();
-
-			// Right
-			if (addFace[0]) {
-				for (unsigned int index = 0; index < 6; index++) {
-					mIndices.push_back(VolumeIndicesRight[index] + startIndex);
-				}
-			}
-
-			// Left
-			if (addFace[1]) {
-				for (unsigned int index = 0; index < 6; index++) {
-					mIndices.push_back(VolumeIndicesLeft[index] + startIndex);
-				}
-			}
-
-			// Back
-			if (addFace[2]) {
-				for (unsigned int index = 0; index < 6; index++) {
-					mIndices.push_back(VolumeIndicesBack[index] + startIndex);
-				}
-			}
-
-			// Front
-			if (addFace[3]) {
-				for (unsigned int index = 0; index < 6; index++) {
-					mIndices.push_back(VolumeIndicesFront[index] + startIndex);
-				}
-			}
-
-			// Top
-			if (addFace[4]) {
-				for (unsigned int index = 0; index < 6; index++) {
-					mIndices.push_back(VolumeIndicesTop[index] + startIndex);
-				}
-			}
-
-			// Bottom
-			if (addFace[5]) {
-				for (unsigned int index = 0; index < 6; index++) {
-					mIndices.push_back(VolumeIndicesBottom[index] + startIndex);
-				}
-			}
-
-			// Add Vertices
-			for (unsigned int index = 0; index < 8; index++) {
-				mVertices.push_back(VertexPositionColor(verts[index], verts[index]));
-			}
-		}
-	}
-	*/
-
 	mCubes.clear();
 }
 
@@ -779,9 +632,8 @@ void Volume::buildVertBuffer()
 {
 	VertexPositionColor* data = new VertexPositionColor[mVertices.size()];
 	std::copy(mVertices.begin(), mVertices.end(), data);
-	unsigned int mNumBoxes = (mVertices.size() / 8);
+
 	unsigned int mNumVertices = mVertices.size();
-	unsigned int mNumTris = mNumBoxes * NUM_BOX_TRIS;
 	mNumIndices = mIndices.size();
 
 	GLuint* indices = new GLuint [mNumIndices];
