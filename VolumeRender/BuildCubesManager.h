@@ -21,6 +21,8 @@ private:
 	std::vector<VolumeCube>* mCubes;
 
 	HANDLE		g_hMutex;
+
+	treeType kdTree;
 };
 
 

@@ -4,7 +4,21 @@
 #include "VolumeCube.h"
 #include "VolumeStructs.h"
 
-const  GLushort VolumeIndicesFront[] = { 4, 5, 1, 1, 0, 4, };
+double kdtreeNode::distance( const kdtreeNode &node)
+{
+	double x = xyz[0] - node.xyz[0];
+	double y = xyz[1] - node.xyz[1];
+	double z = xyz[2] - node.xyz[2];
+
+	// this is not correct   return sqrt( x*x+y*y+z*z);
+
+	// this is what kdtree checks with find_within_range()
+	// the "manhattan distance" from the search point.
+	// effectively, distance is the maximum distance in any one dimension.
+	return max( fabs(x), max( fabs(y), fabs(z) ) );
+}
+
+const GLushort VolumeIndicesFront[] = { 4, 5, 1, 1, 0, 4, };
 const GLushort VolumeIndicesTop[] = { 0, 1, 2, 2, 3, 0, };
 const GLushort VolumeIndicesBack[] = { 3, 2, 6, 6, 7, 3, };
 const GLushort VolumeIndicesBottom[] = { 7, 6, 5, 5, 4, 7, };
@@ -49,11 +63,16 @@ void BuildCubesVert::unlock() {
 	ReleaseMutex(g_hMutex);
 }
 
-void BuildCubesVert::setup(HANDLE mutex,
+void BuildCubesVert::setup(
+		HANDLE mutex,
+		treeType* kdTree,
 		std::vector<VolumeCube>* cubes, 
 		std::vector<VertexPositionColor>* vertices,
 		std::vector<GLuint>* indices) {
 	g_hMutex = mutex;
+
+	kdCubes = kdTree;
+
 	mCubes = cubes;
 	mVertices = vertices;
 	mIndices = indices;
@@ -83,7 +102,40 @@ DWORD BuildCubesVert::runThread() {
 	points[3] = center - Eigen::Vector3f(0.f, (*mCubes)[i].Height, 0.f);
 	points[4] = center + Eigen::Vector3f(0.f, 0.f, (*mCubes)[i].Depth);
 	points[5] = center - Eigen::Vector3f(0.f, 0.f, (*mCubes)[i].Depth);
+	
+	for (unsigned int p = 0; p < 6; p++) {
+		kdtreeNode target;
+		target.xyz[0] = points[p].x();
+		target.xyz[1] = points[p].y();
+		target.xyz[2] = points[p].z();
 
+		std::pair<treeType::const_iterator,double> found = kdCubes->find_nearest(target);
+		int k = found.first->index;
+
+		//add the min/max vertex to the list
+		Eigen::Vector3f t_min = Eigen::Vector3f(
+			(*mCubes)[k].X, 
+			(*mCubes)[k].Y,
+			(*mCubes)[k].Z);
+		Eigen::Vector3f t_max = Eigen::Vector3f(
+			(*mCubes)[k].X + (*mCubes)[k].Width, 
+			(*mCubes)[k].Y + (*mCubes)[k].Height, 
+			(*mCubes)[k].Z + (*mCubes)[k].Depth);
+
+		for (unsigned int p = 0; p < 6; p++) {
+			if (points[p].x() > t_min.x() &&
+				points[p].y() > t_min.y() &&
+				points[p].z() > t_min.z() &&
+				points[p].x() < t_max.x() &&
+				points[p].y() < t_max.y() &&
+				points[p].z() < t_max.z()) {
+					addFace[p] = false;
+					inside++;
+			}
+		}
+	}
+
+	/*
 	for (unsigned int k = 0; k < (*mCubes).size(); k++) {
 		//add the min/max vertex to the list
 		Eigen::Vector3f t_min = Eigen::Vector3f(
@@ -110,7 +162,7 @@ DWORD BuildCubesVert::runThread() {
 		if (inside >= 6)
 			break;
 	}
-
+	*/
 	if (inside < 6) {
 		lock();
 

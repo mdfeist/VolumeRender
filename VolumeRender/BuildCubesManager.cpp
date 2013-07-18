@@ -24,8 +24,21 @@ void BuildCubesManager::setup(
 {
 	mCubes = cubes;
 
+	for ( size_t n = 0; n < mCubes->size(); ++n)
+	{
+		kdtreeNode node;
+		node.xyz[0] = (*mCubes)[n].X + (*mCubes)[n].Width/2.f;
+		node.xyz[1] = (*mCubes)[n].Y + (*mCubes)[n].Height/2.f;
+		node.xyz[2] = (*mCubes)[n].Z + (*mCubes)[n].Depth/2.f;
+		node.index = n;
+
+		kdTree.insert( node );
+	}
+
+	kdTree.optimise();
+
 	for (int i = 0; i < MAX_THREADS; i++)
-		threads[i].setup(g_hMutex, cubes, vertices, indices);
+		threads[i].setup(g_hMutex, &kdTree, cubes, vertices, indices);
 }
 
 void BuildCubesManager::buildCubes() {

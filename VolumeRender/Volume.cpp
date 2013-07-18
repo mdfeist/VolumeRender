@@ -18,7 +18,7 @@
 
 #include "BuildCubesManager.h"
 
-#define EMPTY_SPACE_SIZE 0.1f
+#define EMPTY_SPACE_SIZE 0.05f
 // All textures for the buffer are TEXTURE_WIDTHxTEXTURE_HEIGHT in dimensions
 #define RES_480p 1
 #define RES_720p 0
@@ -41,27 +41,6 @@
 const GLushort  NUM_BOX_INDICES = 36;			// Number of indices for a single box
 const GLushort  NUM_BOX_VERTICES = 8;			// Number of vertices for a single box
 const GLushort  NUM_BOX_TRIS = 12;				// Number of triangles for a single box
-GLushort  VolumeIndices[] =					// Array of indices for a single box
-{
-	// front
-    0, 1, 2,
-    2, 3, 0,
-    // top
-    3, 2, 6,
-    6, 7, 3,
-    // back
-    7, 6, 5,
-    5, 4, 7,
-    // bottom
-    4, 5, 1,
-    1, 0, 4,
-    // left
-    4, 0, 3,
-    3, 7, 4,
-    // right
-    1, 5, 6,
-    6, 2, 1,
-};
 
 GLushort  VolumeIndicesFront[] = { 4, 5, 1, 1, 0, 4, };
 GLushort  VolumeIndicesTop[] = { 0, 1, 2, 2, 3, 0, };

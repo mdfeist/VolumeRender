@@ -3,7 +3,26 @@
 
 #include <GL/glew.h>
 
+#include "kdtree++/kdtree.hpp"
+#include <algorithm>
 #include <vector>
+
+struct kdtreeNode
+{
+	typedef double value_type;
+
+	double xyz[3];
+	size_t index;
+
+	value_type operator[](size_t n) const
+	{
+		return xyz[n];
+	}
+
+	double distance( const kdtreeNode &node);
+};
+
+typedef KDTree::KDTree<3, kdtreeNode> treeType;
 
 class VolumeCube;
 struct VertexPositionColor;
@@ -15,6 +34,7 @@ public:
 	~BuildCubesVert(void);
 
 	void setup(HANDLE mutex,
+		treeType* kdTree,
 		std::vector<VolumeCube>* cubes, 
 		std::vector<VertexPositionColor>* vertices,
 		std::vector<GLuint>* indices);
@@ -31,6 +51,8 @@ private:
 	std::vector<VertexPositionColor>* mVertices;
 	std::vector<GLuint>* mIndices;
 
+	treeType* kdCubes;
+	
 	int cubeIndex;
 
 	HANDLE g_hMutex;
