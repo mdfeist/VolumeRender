@@ -14,10 +14,27 @@
 #include "TransferControlPoint.h"
 #include "Cubic.h"
 #include "VolumeCube.h"
+#include "VolumeStructs.h"
 
+#include "BuildCubesManager.h"
+
+#define EMPTY_SPACE_SIZE 0.1f
 // All textures for the buffer are TEXTURE_WIDTHxTEXTURE_HEIGHT in dimensions
-#define TEXTURE_WIDTH 800
-#define TEXTURE_HEIGHT 640
+#define RES_480p 1
+#define RES_720p 0
+
+#if RES_720p || RES_480p
+#if RES_720p
+#define TEXTURE_WIDTH 1280
+#define TEXTURE_HEIGHT 720
+#else if RES_480p
+#define TEXTURE_WIDTH 854
+#define TEXTURE_HEIGHT 480
+#endif
+#else
+#define TEXTURE_WIDTH 256
+#define TEXTURE_HEIGHT 256
+#endif
 // Used to find the offset of variables in a structure (found when binding the VBO)
 #define MEMBER_OFFSET(s,m) ((char *)NULL + (offsetof(s,m)))
 
@@ -46,60 +63,12 @@ GLushort  VolumeIndices[] =					// Array of indices for a single box
     6, 2, 1,
 };
 
-struct float3 {										// A three dimensional float
-													// Variables for each dimension
-	float x;										// x dimension
-	float y;										// y dimension
-	float z;										// z dimension								
-	
-	float3() {										// Generic constructor
-		x = 0.f;
-		y = 0.f;
-		z = 0.f;
-	}
-
-	float3(float _x, float _y, float _z) {			// Constructor with given values
-		x = _x;
-		y = _y;
-		z = _z;
-	}
-
-	float3 operator + (const float3 &b) const {		// Addition operator
-		return float3(x + b.x, y + b.y, z + b.z);
-	}
-
-	float3 operator - (const float3 &b) const {		// Subtraction operator
-		return float3(x - b.x, y - b.y, z - b.z);
-	}
-};
-
-struct Vertex										// Vertex used for creating VBO (Includes Normals)
-{
-    float3 m_Pos;									// Position of vertex
-    float3 m_Color;									// Color of vertex
-	float3 m_Normal;								// Normal of vertex
-
-	Vertex() {}										// Generic constructor
-
-	Vertex(float3 pos, float3 norm) {				// Constructor with given values
-		m_Pos = pos;								// Set the position
-		m_Color = pos;								// Set color to be the same as position
-		m_Normal = norm;							// Set normal
-	}
-};
-
-struct VertexPositionColor							// Vertex used for creating VBO (No Normals)
-{
-	float3 m_Pos;									// Position of vertex
-    float3 m_Color;									// Color of vertex
-
-	VertexPositionColor() {}							// Generic constructor
-
-	VertexPositionColor(float3 pos, float3 color) {	// Constructor with given values
-		m_Pos = pos;								// Set the position
-		m_Color = color;							// Set color to be the same as position
-	}
-};
+GLushort  VolumeIndicesFront[] = { 4, 5, 1, 1, 0, 4, };
+GLushort  VolumeIndicesTop[] = { 0, 1, 2, 2, 3, 0, };
+GLushort  VolumeIndicesBack[] = { 3, 2, 6, 6, 7, 3, };
+GLushort  VolumeIndicesBottom[] = { 7, 6, 5, 5, 4, 7, };
+GLushort  VolumeIndicesLeft[] = { 4, 0, 3, 3, 7, 4, };
+GLushort  VolumeIndicesRight[] = { 1, 5, 6, 6, 2, 1, };
 
 float length(float3 p) {							// Get the length of a float3
 	return sqrtf(p.x*p.x + p.y*p.y + p.z*p.z);
@@ -151,8 +120,8 @@ GLuint newTexture(int width, int height) {
 	glGenTextures(1, &texture);												// Generate texture
 	glBindTexture(GL_TEXTURE_2D, texture);									// Bind texture
 	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);				// Use the texture color when rendering
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);		// Set the MAG_FILTER to interpolate linearly between the closest pixels
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);		// Set the MIN_FILTER to interpolate linearly between the closest pixels
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);		// Set the MAG_FILTER to interpolate linearly between the closest pixels
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);		// Set the MIN_FILTER to interpolate linearly between the closest pixels
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);	// Clamp the X value to boarder when doing texture look ups
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);	// Clamp the Y value to boarder when doing texture look ups
 	glTexImage2D(															// Create texture
@@ -273,7 +242,9 @@ void Volume::setup() {
 	std::cout << "- Recursively Building Cubes for Empty Space Leaping" << std::endl; 
 	VolumeCube C(0.f, 0.f, 0.f, 1.f, 1.f, 1.f);
 	recursiveVolumeBuild(C);
-	std::cout << "- Cubes Created" << std::endl; 
+	std::cout << "- Adding Vertices for Cubes" << std::endl; 
+	buildCubes();
+	std::cout << "- Cubes Created" << std::endl;
 }
 
 int Volume::loadRaw(char *directory) {
@@ -514,8 +485,8 @@ void Volume::computeTransferFunction() {
 	alphaKnots.push_back( new TransferControlPoint(0.0f, 63) );		// Air
 	alphaKnots.push_back( new TransferControlPoint(0.05f, 64) );	// Lung
 	alphaKnots.push_back( new TransferControlPoint(0.02f, 70) );	// Lung
-	alphaKnots.push_back( new TransferControlPoint(0.8f, 112) );	// Fat
-	alphaKnots.push_back( new TransferControlPoint(0.7f, 128) );	// Fat
+	alphaKnots.push_back( new TransferControlPoint(1.0f, 112) );	// Fat
+	alphaKnots.push_back( new TransferControlPoint(0.95f, 128) );	// Fat
 	alphaKnots.push_back( new TransferControlPoint(0.2f, 129) );	// Blood/Muscle
 	alphaKnots.push_back( new TransferControlPoint(0.05f, 132) );	// Blood/Muscle
 	alphaKnots.push_back( new TransferControlPoint(0.3f, 133) );	// Liver
@@ -598,51 +569,6 @@ void Volume::computeTransferFunction() {
 	}
 }
 
-void Volume::createCube(float x, float y, float z) {
-	// Define the 24 vertices of a unit cube
-	Vertex cube_Vertices[24] = {
-		// Back side
-		Vertex( float3( 0.0, 0.0, 0.0), float3(0.0, 0.0, -1.0)),
-		Vertex( float3( 0.0, y, 0.0), float3(0.0, 0.0, -1.0)),
-		Vertex( float3( x, y, 0.0), float3(0.0, 0.0, -1.0)),
-		Vertex( float3( x, 0.0, 0.0), float3(0.0, 0.0, -1.0)),
-		// Front side
-		Vertex( float3( 0.0, 0.0, z), float3(0.0, 0.0, 1.0)),
-		Vertex( float3( x, 0.0, z), float3(0.0, 0.0, 1.0)),
-		Vertex( float3( x, y, z), float3(0.0, 0.0, 1.0)),
-		Vertex( float3( 0.0, y, z), float3(0.0, 0.0, 1.0)),
-		// Top side
-		Vertex( float3( 0.0, y, 0.0), float3(0.0, 1.0, 0.0)),
-		Vertex( float3( 0.0, y, z), float3(0.0, 1.0, 0.0)),
-		Vertex( float3( x, y, z), float3(0.0, 1.0, 0.0)),
-		Vertex( float3( x, y, 0.0), float3(0.0, 1.0, 0.0)),
-		// Bottom side
-		Vertex( float3( 0.0, 0.0, 0.0), float3(0.0, -1.0, 0.0)),
-		Vertex( float3( x, 0.0, 0.0), float3(0.0, -1.0, 0.0)),
-		Vertex( float3( x, 0.0, z), float3(0.0, -1.0, 0.0)),
-		Vertex( float3( 0.0, 0.0, z), float3(0.0, -1.0, 0.0)),
-		// Left Side
-		Vertex( float3( 0.0, 0.0, 0.0), float3(-1.0, 0.0, 0.0)),
-		Vertex( float3( 0.0, 0.0, z), float3(-1.0, 0.0, 0.0)),
-		Vertex( float3( 0.0, y, z), float3(-1.0, 0.0, 0.0)),
-		Vertex( float3( 0.0, y, 0.0), float3(-1.0, 0.0, 0.0)),
-		// Right Side
-		Vertex( float3( x, 0.0, 0.0), float3(1.0, 0.0, 0.0)),
-		Vertex( float3( x, y, 0.0), float3(1.0, 0.0, 0.0)),
-		Vertex( float3( x, y, z), float3(1.0, 0.0, 0.0)),
-		Vertex( float3( x, 0.0, z), float3(1.0, 0.0, 0.0))
-	};
-
-	glGenBuffersARB( 1, &cubeVerticesVBO );						// Create VBO
-
-	glBindBufferARB( GL_ARRAY_BUFFER_ARB, cubeVerticesVBO );	// Bind VBO buffer
-	glBufferDataARB( GL_ARRAY_BUFFER_ARB,						// Copy the vertex data to the VBO
-		sizeof(cube_Vertices),									// Get the size of cube_Vertices
-		cube_Vertices,											// Give the data for the vertices
-		GL_STATIC_DRAW_ARB );									// Tell the buffer that the data is not going to change
-	glBindBufferARB( GL_ARRAY_BUFFER_ARB, 0 );					// Unbind VBO buffer
-}
-
 int Volume::sampleVolume(int x, int y, int z)
 {
 	x = (int)clamp(x, 0, volumeWidth - 1);
@@ -656,11 +582,11 @@ float Volume::sampleVolume3DWithTransfer(Eigen::Vector3f& min, Eigen::Vector3f& 
 {
 	float result = 0.0f;
 
-	for (int x = (int)floorf(min.x()); x <= (int)ceilf(max.x()); x++)
+	for (int x = (int)floorf(min.x()); x <= (int)ceilf(max.x()); x += 3)
 	{
-		for (int y = (int)floorf(min.y()); y <= (int)ceilf(max.y()); y++)
+		for (int y = (int)floorf(min.y()); y <= (int)ceilf(max.y()); y += 3)
 		{
-			for (int z = (int)floorf(min.z()); z <= (int)ceilf(max.z()); z++)
+			for (int z = (int)floorf(min.z()); z <= (int)ceilf(max.z()); z += 3)
 			{
 				//sample the volume to get the iso value
 				int isovalue = sampleVolume(x, y, z);
@@ -676,12 +602,15 @@ float Volume::sampleVolume3DWithTransfer(Eigen::Vector3f& min, Eigen::Vector3f& 
 
 void Volume::recursiveVolumeBuild(VolumeCube C)
 {
-	//stop when the current cube is 1/10 of the original volume
-	if (C.Width <= 0.05f)
+	//stop when the current cube is less than or equal to the EMPTY_SPACE_SIZE
+	if (C.Width <= EMPTY_SPACE_SIZE)
 	{
 		//add the min/max vertex to the list
 		Eigen::Vector3f min = Eigen::Vector3f(C.X, C.Y, C.Z);
-		Eigen::Vector3f max = Eigen::Vector3f(C.X + C.Width, C.Y + C.Height, C.Z + C.Depth);
+		Eigen::Vector3f max = Eigen::Vector3f(
+			C.X + C.Width, 
+			C.Y + C.Height, 
+			C.Z + C.Depth);
 		Eigen::Vector3f min_pi = Eigen::Vector3f(
 			C.X * volumeWidth,
 			C.Y * volumeHeight,
@@ -697,33 +626,7 @@ void Volume::recursiveVolumeBuild(VolumeCube C)
 
 		if (opacity > 0.0f)
 		{
-
-			float3 pos1(min.x(), min.y(), max.z());
-			float3 pos2(max.x(), min.y(), max.z());
-			float3 pos3(max.x(), max.y(), max.z());
-			float3 pos4(min.x(), max.y(), max.z());
-			float3 pos5(min.x(), min.y(), min.z());
-			float3 pos6(max.x(), min.y(), min.z());
-			float3 pos7(max.x(), max.y(), min.z());
-			float3 pos8(min.x(), max.y(), min.z());
-
-			VertexPositionColor v1(pos1, pos1);
-			VertexPositionColor v2(pos2, pos2);
-			VertexPositionColor v3(pos3, pos3);
-			VertexPositionColor v4(pos4, pos4);
-			VertexPositionColor v5(pos5, pos5);
-			VertexPositionColor v6(pos6, pos6);
-			VertexPositionColor v7(pos7, pos7);
-			VertexPositionColor v8(pos8, pos8);
-
-			mVertices.push_back(v1);
-			mVertices.push_back(v2);
-			mVertices.push_back(v3);
-			mVertices.push_back(v4);
-			mVertices.push_back(v5);
-			mVertices.push_back(v6);
-			mVertices.push_back(v7);
-			mVertices.push_back(v8);
+			mCubes.push_back(C);
 		}
 		return;
 	}
@@ -762,6 +665,137 @@ void Volume::recursiveVolumeBuild(VolumeCube C)
 	}
 }
 
+void Volume::buildCubes() {
+	BuildCubesManager manager;
+	manager.setup(&mCubes, &mVertices, &mIndices);
+	manager.buildCubes();
+
+	/*
+	for (unsigned int i = 0; i < mCubes.size(); i++) {
+		Eigen::Vector3f center = Eigen::Vector3f(
+			mCubes[i].X + mCubes[i].Width/2.f, 
+			mCubes[i].Y + mCubes[i].Height/2.f, 
+			mCubes[i].Z + mCubes[i].Depth/2.f);
+
+		int inside = 0;
+		bool addFace[6];
+		memset(addFace, true, 6);
+
+		Eigen::Vector3f points[6];
+
+		points[0] = center + Eigen::Vector3f(mCubes[i].Width, 0.f, 0.f);
+		points[1] = center - Eigen::Vector3f(mCubes[i].Width, 0.f, 0.f);
+		points[2] = center + Eigen::Vector3f(0.f, mCubes[i].Height, 0.f);
+		points[3] = center - Eigen::Vector3f(0.f, mCubes[i].Height, 0.f);
+		points[4] = center + Eigen::Vector3f(0.f, 0.f, mCubes[i].Depth);
+		points[5] = center - Eigen::Vector3f(0.f, 0.f, mCubes[i].Depth);
+
+		for (unsigned int k = 0; k < mCubes.size(); k++) {
+			//add the min/max vertex to the list
+			Eigen::Vector3f t_min = Eigen::Vector3f(
+				mCubes[k].X, 
+				mCubes[k].Y,
+				mCubes[k].Z);
+			Eigen::Vector3f t_max = Eigen::Vector3f(
+				mCubes[k].X + mCubes[k].Width, 
+				mCubes[k].Y + mCubes[k].Height, 
+				mCubes[k].Z + mCubes[k].Depth);
+
+			for (unsigned int p = 0; p < 6; p++) {
+				if (points[p].x() > t_min.x() &&
+					points[p].y() > t_min.y() &&
+					points[p].z() > t_min.z() &&
+					points[p].x() < t_max.x() &&
+					points[p].y() < t_max.y() &&
+					points[p].z() < t_max.z()) {
+						addFace[p] = false;
+						inside++;
+				}
+			}
+
+			if (inside >= 6)
+				break;
+		}
+
+		if (inside < 6) {
+			//add the min/max vertex to the list
+			Eigen::Vector3f min = Eigen::Vector3f(
+				mCubes[i].X, 
+				mCubes[i].Y,
+				mCubes[i].Z);
+			Eigen::Vector3f max = Eigen::Vector3f(
+				mCubes[i].X + mCubes[i].Width, 
+				mCubes[i].Y + mCubes[i].Height, 
+				mCubes[i].Z + mCubes[i].Depth);
+
+			// Create Vertices
+			float3 verts[8] = {
+				float3(min.x(), min.y(), max.z()),
+				float3(max.x(), min.y(), max.z()),
+				float3(max.x(), max.y(), max.z()),
+				float3(min.x(), max.y(), max.z()),
+				float3(min.x(), min.y(), min.z()),
+				float3(max.x(), min.y(), min.z()),
+				float3(max.x(), max.y(), min.z()),
+				float3(min.x(), max.y(), min.z()),
+			};
+			
+			// Add Indices
+			unsigned int startIndex = mVertices.size();
+
+			// Right
+			if (addFace[0]) {
+				for (unsigned int index = 0; index < 6; index++) {
+					mIndices.push_back(VolumeIndicesRight[index] + startIndex);
+				}
+			}
+
+			// Left
+			if (addFace[1]) {
+				for (unsigned int index = 0; index < 6; index++) {
+					mIndices.push_back(VolumeIndicesLeft[index] + startIndex);
+				}
+			}
+
+			// Back
+			if (addFace[2]) {
+				for (unsigned int index = 0; index < 6; index++) {
+					mIndices.push_back(VolumeIndicesBack[index] + startIndex);
+				}
+			}
+
+			// Front
+			if (addFace[3]) {
+				for (unsigned int index = 0; index < 6; index++) {
+					mIndices.push_back(VolumeIndicesFront[index] + startIndex);
+				}
+			}
+
+			// Top
+			if (addFace[4]) {
+				for (unsigned int index = 0; index < 6; index++) {
+					mIndices.push_back(VolumeIndicesTop[index] + startIndex);
+				}
+			}
+
+			// Bottom
+			if (addFace[5]) {
+				for (unsigned int index = 0; index < 6; index++) {
+					mIndices.push_back(VolumeIndicesBottom[index] + startIndex);
+				}
+			}
+
+			// Add Vertices
+			for (unsigned int index = 0; index < 8; index++) {
+				mVertices.push_back(VertexPositionColor(verts[index], verts[index]));
+			}
+		}
+	}
+	*/
+
+	mCubes.clear();
+}
+
 void Volume::buildVertBuffer()
 {
 	VertexPositionColor* data = new VertexPositionColor[mVertices.size()];
@@ -769,18 +803,10 @@ void Volume::buildVertBuffer()
 	unsigned int mNumBoxes = (mVertices.size() / 8);
 	unsigned int mNumVertices = mVertices.size();
 	unsigned int mNumTris = mNumBoxes * NUM_BOX_TRIS;
+	mNumIndices = mIndices.size();
 
-	mNumIndices = mNumBoxes * NUM_BOX_INDICES;
-
-	//we are handling the adding vertex condition
 	GLuint* indices = new GLuint [mNumIndices];
-	for (int copyIndex = 0; copyIndex < mNumBoxes; copyIndex++)
-	{
-		for (int index = 0; index < NUM_BOX_INDICES; index++)
-		{
-			indices[copyIndex * NUM_BOX_INDICES + index] = (GLuint)(VolumeIndices[index] + (copyIndex) * NUM_BOX_VERTICES);
-		}
-	}
+	std::copy(mIndices.begin(), mIndices.end(), indices);
 
 	// Create VBO for vertices
 	glGenBuffersARB( 1, &cubeVerticesVBO );							// Create VBO
@@ -805,6 +831,10 @@ void Volume::buildVertBuffer()
 	glBindBufferARB( GL_ELEMENT_ARRAY_BUFFER_ARB, 0 );				// Unbind buffer
 
 	delete[] indices;
+	delete[] data;
+
+	mVertices.clear();
+	mIndices.clear();
 }
 
 void Volume::unbindFBO() {

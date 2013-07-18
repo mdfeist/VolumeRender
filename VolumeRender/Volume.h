@@ -8,7 +8,7 @@
 #include <Cg/cg.h>
 #include <Cg/cgGL.h>
 
-#include <GL\glut.h>
+#include <GL/glut.h>
 
 #include <vector>
 
@@ -91,14 +91,16 @@ private:
 	GLubyte* transfer;
 	float isoValue;
 
+	std::vector<VolumeCube> mCubes;
 	std::vector<VertexPositionColor> mVertices;
-
-	void createCube(float x, float y, float z);
+	std::vector<GLuint> mIndices;
+	
 	GLuint createVolume();
 	void computeTransferFunction();
 
 	int sampleVolume(int x, int y, int z);
 	float sampleVolume3DWithTransfer(Eigen::Vector3f& min, Eigen::Vector3f& max);
+	void buildCubes();
 	void buildVertBuffer();
 
 	std::vector<TransferControlPoint*> colorKnots;

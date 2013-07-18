@@ -144,7 +144,11 @@ void Renderer::render() {								// Render the scene
 	if (!lock())										// Lock renderer
 		return;
 
-	wglMakeCurrent( hDC, hRC );							// Make current context
+	HDC h_DC = wglGetCurrentDC();
+	HGLRC h_RC = wglGetCurrentContext();
+
+	if (h_DC != hDC || h_RC != hRC)
+		wglMakeCurrent( hDC, hRC );						// Make current context
 
 	static float rot = 0.0f;							// Rotation value
 	rot += 0.75f;										// Update Rotation
@@ -170,7 +174,6 @@ void Renderer::render() {								// Render the scene
 	}
 
 	SwapBuffers(hDC);									// Swap Buffers (Double Buffering)
-	wglMakeCurrent( NULL, NULL );						// Deactivate context
 	unlock();											// Unlock Render
 }
 

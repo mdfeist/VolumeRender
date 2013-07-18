@@ -95,6 +95,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Actor.h" />
+    <ClInclude Include="BuildCubesManager.h" />
+    <ClInclude Include="BuildCubesVert.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="Cubic.h" />
     <ClInclude Include="Renderer.h" />
@@ -105,8 +107,11 @@
     <ClInclude Include="TransferControlPoint.h" />
     <ClInclude Include="Volume.h" />
     <ClInclude Include="VolumeCube.h" />
+    <ClInclude Include="VolumeStructs.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="BuildCubesManager.cpp" />
+    <ClCompile Include="BuildCubesVert.cpp" />
     <ClCompile Include="Camera.cpp" />
     <ClCompile Include="Renderer.cpp" />
     <ClCompile Include="stdafx.cpp">
