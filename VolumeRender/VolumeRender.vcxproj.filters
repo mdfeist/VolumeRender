@@ -31,6 +31,9 @@
     <None Include="shader\bicubic.cg">
       <Filter>Resource Files\shader</Filter>
     </None>
+    <None Include="shader\multiSample.cg">
+      <Filter>Resource Files\shader</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">

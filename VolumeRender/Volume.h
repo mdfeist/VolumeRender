@@ -29,8 +29,6 @@ public:
 	void init();
 	bool needsInit();
 	void setup();
-	
-	void recursiveVolumeBuild(VolumeCube C);
 
 	void setIsoValue(float value);
 	void increaseIsoValue(float value);
@@ -100,6 +98,7 @@ private:
 
 	int sampleVolume(int x, int y, int z);
 	float sampleVolume3DWithTransfer(Eigen::Vector3f& min, Eigen::Vector3f& max);
+	void recursiveVolumeBuild(VolumeCube C);
 	void buildCubes();
 	void buildVertBuffer();
 

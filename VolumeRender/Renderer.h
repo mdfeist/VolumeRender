@@ -45,20 +45,25 @@ public:
 protected:
 	DWORD runThread();
 private:
-	HDC			hDC;			// Private GDI Device Context
-	HGLRC		hRC;			// Permanent Rendering Context
-	HWND		hWnd;			// Holds Our Window Handle
-	HINSTANCE	hInstance;		// Holds The Instance Of The Application
+	HDC			hDC;				// Private GDI Device Context
+	HGLRC		hRC;				// Permanent Rendering Context
+	HWND		hWnd;				// Holds Our Window Handle
+	HINSTANCE	hInstance;			// Holds The Instance Of The Application
 
-	Camera*		camera;			// Camera for rendering
-	int			windowWidth;	// The width of the window
-	int			windowHeight;	// The height of the window
-	bool		needsResize;	// OpenGL needs to be resized
+	Camera*		camera;				// Camera for rendering
+	int			windowWidth;		// The width of the window
+	int			windowHeight;		// The height of the window
+	bool		needsResize;		// OpenGL needs to be resized
 
-	bool		keys[256];		// Array Used For The Keyboard Routine
-	bool		active;			// Window Active Flag Set To TRUE By Default
-	bool		fullscreen;		// Full screen Flag Set To Full screen Mode By Default
-	bool		done;			// Boolean Variable To Exit Loop
+	int			mouse_start_drag_x;
+	int			mouse_start_drag_y;
+	float		rot;
+	float		rotationVelocity;
+
+	bool		keys[256];			// Array Used For The Keyboard Routine
+	bool		active;				// Window Active Flag Set To TRUE By Default
+	bool		fullscreen;			// Full screen Flag Set To Full screen Mode By Default
+	bool		done;				// Boolean Variable To Exit Loop
 
 	HANDLE		g_hMutex;
 

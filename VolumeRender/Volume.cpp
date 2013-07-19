@@ -21,16 +21,16 @@
 // Minimum size of each sub cube of the Empty Space Leaping algorithm
 #define EMPTY_SPACE_SIZE 0.05f
 // All textures for the buffer are TEXTURE_WIDTHxTEXTURE_HEIGHT in dimensions
-#define RES_480p 0
+#define RES_512 0
 #define RES_720p 1
 
-#if RES_720p || RES_480p
+#if RES_720p || RES_512
 #if RES_720p
 #define TEXTURE_WIDTH 1280
 #define TEXTURE_HEIGHT 720
-#else if RES_480p
-#define TEXTURE_WIDTH 854
-#define TEXTURE_HEIGHT 480
+#else if RES_512
+#define TEXTURE_WIDTH 512
+#define TEXTURE_HEIGHT 512
 #endif
 #else
 #define TEXTURE_WIDTH 256
@@ -90,8 +90,8 @@ GLuint newTexture(int width, int height) {
 	glGenTextures(1, &texture);												// Generate texture
 	glBindTexture(GL_TEXTURE_2D, texture);									// Bind texture
 	glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);				// Use the texture color when rendering
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);		// Set the MAG_FILTER to interpolate linearly between the closest pixels
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);		// Set the MIN_FILTER to interpolate linearly between the closest pixels
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);		// Set the MAG_FILTER to interpolate linearly between the closest pixels
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);		// Set the MIN_FILTER to interpolate linearly between the closest pixels
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);	// Clamp the X value to boarder when doing texture look ups
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);	// Clamp the Y value to boarder when doing texture look ups
 	glTexImage2D(															// Create texture
@@ -159,9 +159,9 @@ void Volume::init() {														// Initialize OpenGL properties
 	cgStepSize = cgGetNamedParameter(fProgramFirstPass, "stepSize");
 	cgisoValue = cgGetNamedParameter(fProgramFirstPass, "isoValue");
 
-	cgGLSetParameter1f(cgStepSize, 1.0f/780.0f);							// Set the incremental step size of the ray cast
+	cgGLSetParameter1f(cgStepSize, 1.0f/1024.0f);							// Set the incremental step size of the ray cast
 
-	char shaderSecondPassFile[] = "shader/bicubic.cg";						// Get the path to the post render shader
+	char shaderSecondPassFile[] = "shader/multiSample.cg";					// Get the path to the post render shader
 	if (setupCg(&context, &fProgramSecondPass, &fragmentProfile,			// Load shader
 		shaderSecondPassFile)) {
 		fprintf(stderr, "Error: %s\n", "Initializing Cg");					// Give message if load failed
@@ -218,21 +218,21 @@ void Volume::setup() {														// Pre-compute volume properties
 
 int Volume::loadRaw(char *directory) {										// Loads raw volume data from a file
 	FILE* dataFile = NULL;
-	fopen_s(&dataFile, directory, "rb");
+	fopen_s(&dataFile, directory, "rb");									// Opens file
 
-	if (dataFile) {
-		if (data != NULL) {
-			delete[] data;
-			data = NULL;
+	if (dataFile) {															// Checks if file was able to open
+		if (data != NULL) {													// Checks if volume data already exists
+			delete[] data;													// If so delete it from memory
+			data = NULL;													// Set pointer to NULL
 		}
 
 		std::cout << "- Saved File Found" << std::endl; 
-		fread(&spacingX, sizeof(float), 1, dataFile);
-		fread(&spacingY, sizeof(float), 1, dataFile); 
-		fread(&spacingZ, sizeof(float), 1, dataFile);
-		fread(&volumeWidth, sizeof(int), 1, dataFile); 
-		fread(&volumeHeight, sizeof(int), 1, dataFile);
-		fread(&volumeDepth, sizeof(int), 1, dataFile); 
+		fread(&spacingX, sizeof(float), 1, dataFile);						// Read X spacing size
+		fread(&spacingY, sizeof(float), 1, dataFile);						// Read Y spacing size 
+		fread(&spacingZ, sizeof(float), 1, dataFile);						// Read Z spacing size
+		fread(&volumeWidth, sizeof(int), 1, dataFile);						// Read volume width
+		fread(&volumeHeight, sizeof(int), 1, dataFile);						// Read volume height
+		fread(&volumeDepth, sizeof(int), 1, dataFile);						// Read volume depth
 
 		
 		std::cout << "- Volume Spacing: " 
@@ -249,11 +249,11 @@ int Volume::loadRaw(char *directory) {										// Loads raw volume data from a 
 			<< volumeDepth
 			<< "]" << std::endl;
 
-		pixelCount = volumeWidth * volumeHeight * volumeDepth;
-		data = new GLubyte[pixelCount];
-		fread(data, sizeof(GLubyte), pixelCount, dataFile);
+		pixelCount = volumeWidth * volumeHeight * volumeDepth;				// Calculate the number of voxels
+		data = new GLubyte[pixelCount];										// Allocate memory for the volume data
+		fread(data, sizeof(GLubyte), pixelCount, dataFile);					// Read volume data from file
 
-		fclose(dataFile);
+		fclose(dataFile);													// Close file
 
 		return EXIT_SUCCESS;
 	}
@@ -261,34 +261,32 @@ int Volume::loadRaw(char *directory) {										// Loads raw volume data from a 
 	return EXIT_FAILURE;
 }
 
-int Volume::loadVolume(char *directory) {
-	typedef signed short    PixelType;
-	const unsigned int      Dimension = 3;
+int Volume::loadVolume(char *directory) {									// Loads DICOM files
+	typedef signed short    PixelType;										// How each pixel is stored
+	const unsigned int      Dimension = 3;									// The number of dimensions of the data
 
-	typedef itk::Image< PixelType, Dimension >         ImageType;
+	typedef itk::Image< PixelType, Dimension >         ImageType;			// The image type
 
-	typedef itk::ImageSeriesReader<ImageType> ReaderType; 
-	ReaderType::Pointer reader = ReaderType::New();
+	typedef itk::ImageSeriesReader<ImageType> ReaderType;					// Image reader type
+	ReaderType::Pointer reader = ReaderType::New();							// Create the image reader
 	
-	typedef itk::GDCMImageIO       ImageIOType;
-	ImageIOType::Pointer dicomIO = ImageIOType::New();
+	typedef itk::GDCMImageIO       ImageIOType;								// IO class for reading DICOM images
+	ImageIOType::Pointer dicomIO = ImageIOType::New();						// Create Image IO
 
-	reader->SetImageIO( dicomIO );
+	reader->SetImageIO( dicomIO );											// Set the image IO in the reader to read DICOM images
 
-	typedef itk::GDCMSeriesFileNames NamesGeneratorType;
-	NamesGeneratorType::Pointer nameGenerator = NamesGeneratorType::New();
+	typedef itk::GDCMSeriesFileNames NamesGeneratorType;					// Generate a sequence of filenames from a DICOM series
+	NamesGeneratorType::Pointer nameGenerator = NamesGeneratorType::New();	// Creates new GDCMSeriesFileNames
 
+	nameGenerator->SetUseSeriesDetails( true );								// If multiple volumes are being grouped as a single series for your DICOM objects
+	nameGenerator->AddSeriesRestriction("0008|0021" );						// Add more restriction on the selection of a Series
 
-	nameGenerator->SetUseSeriesDetails( true );
-	nameGenerator->AddSeriesRestriction("0008|0021" );
-
-	nameGenerator->SetDirectory( directory );
+	nameGenerator->SetDirectory( directory );								// Give the directory to read from
 	
 	try
 	{
-		std::cout << std::endl << "The directory: " << directory << std::endl;
-		std::cout << "Contains the following DICOM Series: ";
-		std::cout << std::endl << std::endl;
+		std::cout << "- The directory: " << directory << std::endl;
+		std::cout << "- Contains the following DICOM Series: " << std::endl;
 
 		typedef std::vector< std::string >    SeriesIdContainer;
 		const SeriesIdContainer & seriesUID = nameGenerator->GetSeriesUIDs();
@@ -307,7 +305,7 @@ int Volume::loadVolume(char *directory) {
 		seriesIdentifier = seriesUID.begin()->c_str();
 
 		std::cout << std::endl << std::endl;
-		std::cout << "Now reading series: ";
+		std::cout << "- Now reading series: ";
 		std::cout << seriesIdentifier;
 		std::cout << std::endl << std::endl;
 
@@ -318,12 +316,12 @@ int Volume::loadVolume(char *directory) {
 
 		// File names to Read
 		reader->SetFileNames( fileNames );
-		std::cout << "- Reading files ... ";
+		std::cout << "- Reading files ... " << std::endl;
 
 		try
 		{
 			reader->UpdateLargestPossibleRegion();
-			std::cout << "Successfully read " << fileNames.size() << " file(s)." << std::endl;
+			std::cout << "- Successfully read " << fileNames.size() << " file(s)." << std::endl;
 		}
 		catch (itk::ExceptionObject &ex)
 		{
@@ -673,15 +671,15 @@ void Volume::unbindFBO() {
 	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, 0);
 }
 
-GLuint Volume::setupFBO() {													// Create a new frame buffer for off screen rendering
+GLuint Volume::setupFBO() {														// Create a new frame buffer for off screen rendering
 	GLuint fbo_handle;
 
-	glGenFramebuffersEXT(1, &fbo_handle);									// Create buffer
-	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_handle);					// Bind buffer
+	glGenFramebuffersEXT(1, &fbo_handle);										// Create buffer
+	glBindFramebufferEXT(GL_FRAMEBUFFER_EXT, fbo_handle);						// Bind buffer
 
 	// The depth buffer
-	glGenRenderbuffers(1, &depthrenderbuffer);								// Create depth buffer
-	glBindRenderbuffer(GL_RENDERBUFFER, depthrenderbuffer);					// Bind buffer
+	glGenRenderbuffers(1, &depthrenderbuffer);									// Create depth buffer
+	glBindRenderbuffer(GL_RENDERBUFFER, depthrenderbuffer);						// Bind buffer
 
 	// No need to force GL_DEPTH_COMPONENT24, drivers usually give you the max precision if available
 	//glTexImage2D( GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, TEXTURE_SIZE, TEXTURE_SIZE, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
@@ -690,18 +688,18 @@ GLuint Volume::setupFBO() {													// Create a new frame buffer for off scr
 	// attach the texture to FBO depth attachment point
 	//glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT, GL_DEPTH_ATTACHMENT_EXT, GL_TEXTURE_2D, depthrenderbuffer, 0);
 	
-	glRenderbufferStorage(GL_RENDERBUFFER,									// Create storage
-		GL_DEPTH_COMPONENT,													// Specify that the internal format is the depth component
-		TEXTURE_WIDTH, TEXTURE_HEIGHT);										// Set storage width and height
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER,								// Attach depth buffer to frame buffer
-		GL_DEPTH_ATTACHMENT,												// Specify that the internal format is the depth component
-		GL_RENDERBUFFER, depthrenderbuffer);								// Attach depth render buffer texture to the frame buffer
+	glRenderbufferStorage(GL_RENDERBUFFER,										// Create storage
+		GL_DEPTH_COMPONENT,														// Specify that the internal format is the depth component
+		TEXTURE_WIDTH, TEXTURE_HEIGHT);											// Set storage width and height
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER,									// Attach depth buffer to frame buffer
+		GL_DEPTH_ATTACHMENT,													// Specify that the internal format is the depth component
+		GL_RENDERBUFFER, depthrenderbuffer);									// Attach depth render buffer texture to the frame buffer
 
-	errcheck();																// Check for errors
+	errcheck();																	// Check for errors
 
-	unbindFBO();															// Unbind frame buffer object
+	unbindFBO();																// Unbind frame buffer object
 
-	return fbo_handle;														// Return new frame buffer
+	return fbo_handle;															// Return new frame buffer
 }
 
 bool Volume::bindFBO(GLuint fbo_handle, GLuint *fbo_texture, GLsizei size) {	// Bind frame buffer and attach textures for rendering

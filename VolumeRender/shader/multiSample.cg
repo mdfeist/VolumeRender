@@ -1,0 +1,16 @@
+void main(float2  texCoord : TEXCOORD0,
+	  uniform sampler2D texData,
+	  out float4 color0 : COLOR0)
+{	
+	const float offset_x = 1.f/1024.f;
+	const float offset_y = 1.f/1024.f;
+	const float2 s_offset1 = float2(offset_x, 0.5f*offset_y);
+	const float2 s_offset2 = float2(-0.5f*offset_x, offset_y);
+	const float2 s_offset3 = float2(-offset_x, -0.5f*offset_y);
+	const float2 s_offset4 = float2(offset_x, -offset_y);
+
+	color0 = (tex2D(texData, texCoord + s_offset1) + 
+			tex2D(texData, texCoord + s_offset2) + 
+			tex2D(texData, texCoord + s_offset3) + 
+			tex2D(texData, texCoord + s_offset4))/4.f;
+}	

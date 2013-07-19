@@ -14,6 +14,9 @@ void main(float2  texCoord : TEXCOORD0,
 
 	float4 dst = float4(0, 0, 0, 0);
 
+	const float3 L = normalize(float3(0, 1, 1));
+	const float DELTA = 0.0125;
+
 	if (dir_length > 0.f) {
 		float3 step = normalize(dir) * stepSize;
 	
@@ -32,12 +35,29 @@ void main(float2  texCoord : TEXCOORD0,
 			{
 				src = tex1D(TransferS, value.r);
 
-				src.rgb *= src.a;
-				dst = (1.0f - dst.a)*src + dst;
-			
-				//break from the loop when alpha gets high enough
-				if(dst.a >= .95f) 
-					break;
+				if (src.a > 0.f) {
+					float3 sample1; float3 sample2; 
+					sample1.x = tex3D(VolumeS, pos - float3(DELTA, 0, 0)).x;
+					sample2.x = tex3D(VolumeS, pos + float3(DELTA, 0, 0)).x;
+					sample1.y = tex3D(VolumeS, pos - float3(0, DELTA, 0)).x;
+					sample2.y = tex3D(VolumeS, pos + float3(0, DELTA, 0)).x;
+					sample1.z = tex3D(VolumeS, pos - float3(0, 0, DELTA)).x;
+					sample2.z = tex3D(VolumeS, pos + float3(0, 0, DELTA)).x;
+
+					float3 N = normalize(sample2 - sample1);
+
+					float s = dot(N, L);
+
+					//diffuse shading + fake ambient lighting
+					src.rgb = 0.5f * s * src.rgb + 0.5f * src.rgb;
+
+					src.rgb *= src.a;
+					dst = (1.0f - dst.a)*src + dst;
+
+					//break from the loop when alpha gets high enough
+					if(dst.a >= .95f) 
+						break;
+				}
 			}
 
 			pos += step;
@@ -47,25 +67,6 @@ void main(float2  texCoord : TEXCOORD0,
 			if(length_acc >= dir_length)
 				break;
 		}
-
-		const float3 L = normalize(float3(0, 1, 1));
-	
-		const float DELTA = 0.001;
-		float3 sample1; float3 sample2; 
-		sample1.x = tex3D(VolumeS, pos - float3(DELTA, 0, 0)).x;
-		sample2.x = tex3D(VolumeS, pos + float3(DELTA, 0, 0)).x;
-		sample1.y = tex3D(VolumeS, pos - float3(0, DELTA, 0)).x;
-		sample2.y = tex3D(VolumeS, pos + float3(0, DELTA, 0)).x;
-		sample1.z = tex3D(VolumeS, pos - float3(0, 0, DELTA)).x;
-		sample2.z = tex3D(VolumeS, pos + float3(0, 0, DELTA)).x;
-
-		float3 N = normalize(sample2 - sample1);
-
-		float s = dot(N, L);
-		s *= 0.5;
-
-		//diffuse shading + fake ambient lighting
-		dst.rgb = s * dst.rgb + .5f * dst.rgb;
 	}
 
 	color0 = dst;

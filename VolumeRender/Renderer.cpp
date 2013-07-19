@@ -33,6 +33,9 @@ Renderer::Renderer(void) {
 	camera = new Camera();
 	needsResize = true;
 
+	rot = 0.f;
+	rotationVelocity = 0.f;
+
 	start();
 }
 
@@ -150,15 +153,21 @@ void Renderer::render() {								// Render the scene
 	if (h_DC != hDC || h_RC != hRC)
 		wglMakeCurrent( hDC, hRC );						// Make current context
 
-	static float rot = 0.0f;							// Rotation value
-	rot += 0.75f;										// Update Rotation
-
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);	// Clear screen (Color and Depth)
 	glLoadIdentity();									// Load Identity
-			
+	
+	rot -= rotationVelocity;
+
 	glTranslatef(0, 0, -2.25);							// Set Camera Position
 	glRotatef(25,1,0,0);
 	glRotatef(rot,0,1,0);
+
+	if (rotationVelocity > 0.005)
+		rotationVelocity -= 0.001f;
+	else if (rotationVelocity < -0.005)
+		rotationVelocity += 0.001f;
+	else
+		rotationVelocity = 0.0f;
 
 	for each (Actor* a in actors) {						// Loop through actors
 		if (a->needsInit())								// Check if actor needs set up
@@ -555,6 +564,35 @@ LRESULT Renderer::WndProc(	UINT	uMsg,			// Message For This Window
 		{
 			setKey(wParam, FALSE);
 			return 0;								// Jump Back
+		}
+
+		case WM_LBUTTONDOWN:
+		{
+			mouse_start_drag_x = (short)LOWORD(lParam);
+			mouse_start_drag_y = (short)HIWORD(lParam);
+
+			return 0;
+		}
+
+		case WM_MOUSEMOVE:
+		{
+			// Retrieve mouse screen position
+			int x = (short)LOWORD(lParam);
+			int y = (short)HIWORD(lParam);
+
+			// Check to see if the left button is held down:
+			bool leftButtonDown = wParam & MK_LBUTTON;
+
+			if (leftButtonDown) {
+				float velocity = (float)(mouse_start_drag_x - x)/10.f;
+				if (fabsf(velocity) > 0.01)
+					rotationVelocity = (velocity + rotationVelocity)/2.f;
+			}
+
+			mouse_start_drag_x = x;
+			mouse_start_drag_y = y;
+
+			return 0;
 		}
 
 		case WM_SIZE:								// Resize The OpenGL Window

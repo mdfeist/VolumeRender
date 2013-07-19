@@ -86,6 +86,7 @@
   <ItemGroup>
     <None Include="ReadMe.txt" />
     <None Include="shader\bicubic.cg" />
+    <None Include="shader\multiSample.cg" />
     <None Include="shader\raycast.cg" />
     <None Include="shader\raycastDiffuse.cg" />
     <None Include="shader\simple.cg" />

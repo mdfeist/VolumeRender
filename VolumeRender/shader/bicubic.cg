@@ -1,5 +1,3 @@
-const float blurSize = 1.f/1024.f;
-
 /* COMPATIBILITY 
    - HLSL compilers
    - Cg   compilers
@@ -93,8 +91,7 @@ void main(float2  texCoord : TEXCOORD0,
 	  uniform sampler2D texData,
 	  out float4 color0 : COLOR0)
 {	
-	/*
-	float2 stepxy = float2(1.0/1024.f, 1.0/1024.f);
+	float2 stepxy = float2(1.0/1280.f, 1.0/720.f);
 	float2 pos = texCoord.xy + stepxy * 0.5;
 	float2 f = frac(pos / stepxy);
 
@@ -112,16 +109,4 @@ void main(float2  texCoord : TEXCOORD0,
                       line_run(xystart.y + stepxy.y      , xpos, linetaps, texData) * columntaps.g +
                       line_run(xystart.y + stepxy.y * 2.0, xpos, linetaps, texData) * columntaps.b +
                       line_run(xystart.y + stepxy.y * 3.0, xpos, linetaps, texData) * columntaps.a,1);
-	*/
-
-	const float off_size = 1.0/2048.f;
-	const float2 offset1 = float2(2*off_size, off_size);
-	const float2 offset2 = float2(off_size, -off_size);
-	const float2 offset3 = float2(-off_size, -2*off_size);
-	const float2 offset4 = float2(-off_size, 0.f);
-
-	color0 = (tex2D(texData, texCoord + offset1) +
-		tex2D(texData, texCoord + offset2) +
-		tex2D(texData, texCoord + offset3) +
-		tex2D(texData, texCoord + offset4))/4;
-}	
+}
