@@ -120,6 +120,7 @@ Volume::Volume(void) : Actor()												// Constructor
 	cubeVerticesVBO = 0;													// Set cubeVerticesVBO to NULL
 	initialized = false;													// Set initialized to false
 
+	scale = Eigen::Vector3f::Ones();										// Set scale to all ones
 	position = Eigen::Vector3f(0, 0, 0);									// Set position to the origin
 	rotation = Eigen::Quaternionf::Identity();								// Set rotation to the identity
 
@@ -586,8 +587,7 @@ void Volume::render(Camera* camera) {
 		(spacingZ/spacingX)*								// Scale the voxel spacing depth relative to spacing width
 			((float)volumeDepth/volumeWidth));				// Scale the depth dimension relative to the width
 			
-	//glScalef(2.f, 2.f, 2.f);
-	glScalef(1.5f, 1.5f, 1.5f);								// Scale the volume
+	glScalef(scale.x(), scale.y(), scale.z());				// Scale the volume
 
 	glTranslatef(position.x(), position.y(), position.z());	// set position of the texture cube
 
