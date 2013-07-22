@@ -106,8 +106,10 @@
     <ClInclude Include="targetver.h" />
     <ClInclude Include="Thread.h" />
     <ClInclude Include="TransferControlPoint.h" />
+    <ClInclude Include="TransferFunction.h" />
     <ClInclude Include="Volume.h" />
     <ClInclude Include="VolumeCube.h" />
+    <ClInclude Include="VolumeLoader.h" />
     <ClInclude Include="VolumeStructs.h" />
   </ItemGroup>
   <ItemGroup>
@@ -119,7 +121,9 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="TransferFunction.cpp" />
     <ClCompile Include="Volume.cpp" />
+    <ClCompile Include="VolumeLoader.cpp" />
     <ClCompile Include="VolumeRender.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

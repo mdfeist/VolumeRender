@@ -8,23 +8,28 @@
 
 #include "Renderer.h"
 #include "Volume.h"
+#include "VolumeLoader.h"
+
+#include "TransferFunction.h"
 
 #include "Eigen\Geometry.h"
 
 int main(int argc, char* argv[])
 {
-	Volume* volume = new Volume();
-	//volume->setPosition(2.0, 0.0, 0.0);
-	Eigen::Quaternionf rotation(Eigen::AngleAxisf(-M_PI/2.0, Eigen::Vector3f(1.0, 0.0, 0.0)));
-	volume->setRotation(rotation);
-	
 	//char volumeFile[] = "C:/Users/mdfeist/Desktop/COU IV";
 	char volumeFile[] = "C:/Users/mdfeist/Desktop/MANIX/MANIX/MANIX/CER-CT/ANGIO CT";
 	//char volumeFile[] = "C:/Users/mdfeist/Desktop/ARTIFIX/ARTIFIX/Thorax 1CTA_THORACIC_AORTA_GATED (Adult)/A Aorta w-c  1.5  B20f  60%";
 	//char volumeFile[] = "C:/Users/mdfeist/Desktop/Echo_V1.bin";
 	//char volumeFile[] = "C:/Users/mdfeist/Desktop/T01";
-	volume->loadVolume(volumeFile);
+	VolumeLoader* volumeLoader = new VolumeLoader();
+	volumeLoader->loadVolume(volumeFile);
 	//volume->loadRaw(volumeFile);
+
+	Volume* volume = new Volume();
+	//volume->setPosition(2.0, 0.0, 0.0);
+	Eigen::Quaternionf rotation(Eigen::AngleAxisf(-M_PI/2.0, Eigen::Vector3f(1.0, 0.0, 0.0)));
+	volume->setRotation(rotation);
+	volume->setVolumeData(volumeLoader);
 	volume->setup();
 
 	Renderer* render1 = new Renderer();

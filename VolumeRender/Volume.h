@@ -12,8 +12,10 @@
 
 #include <vector>
 
-class TransferControlPoint;
+class TransferFunction;
+
 class VolumeCube;
+class VolumeLoader;
 
 struct VertexPositionColor;
 
@@ -23,12 +25,12 @@ public:
 	Volume(void);
 	~Volume(void);
 
-	int loadRaw(char *directory);
-	int loadVolume(char *directory);
-
 	void init();
 	bool needsInit();
 	void setup();
+
+	void setTransferFunction(TransferFunction* data);
+	void setVolumeData(VolumeLoader* data, bool shouldReleaseDataAfterSetup = true);
 
 	void setIsoValue(float value);
 	void increaseIsoValue(float value);
@@ -36,12 +38,6 @@ public:
 	void render(Camera*);
 private:
 	bool initialized;
-
-	// Vertex Buffer Object
-	GLuint cubeVerticesVBO;
-	GLuint cubeIndicesVBO;
-	
-	unsigned int mNumIndices;
 
 	// Frame Buffer Object
 	GLuint FBO;
@@ -81,28 +77,31 @@ private:
 			CGprofile *fragmentProfile, char *file);
 
 	// Volume
-	int pixelCount;
-	GLubyte *data;
+	VolumeLoader* volumeData;
+	bool releaseDataAfterSetup;
+
 	float spacingX, spacingY, spacingZ;
 	int volumeWidth, volumeHeight, volumeDepth;
-
-	GLubyte* transfer;
+	
+	TransferFunction* transferFunction;
 	float isoValue;
 
 	std::vector<VolumeCube> mCubes;
 	std::vector<VertexPositionColor> mVertices;
 	std::vector<GLuint> mIndices;
 	
+	unsigned int mNumIndices;
+
+	// Vertex Buffer Object
+	GLuint cubeVerticesVBO;
+	GLuint cubeIndicesVBO;
+	
 	GLuint createVolume();
-	void computeTransferFunction();
 
 	int sampleVolume(int x, int y, int z);
 	float sampleVolume3DWithTransfer(Eigen::Vector3f& min, Eigen::Vector3f& max);
 	void recursiveVolumeBuild(VolumeCube C);
 	void buildCubes();
 	void buildVertBuffer();
-
-	std::vector<TransferControlPoint*> colorKnots;
-	std::vector<TransferControlPoint*> alphaKnots;
 };
 
